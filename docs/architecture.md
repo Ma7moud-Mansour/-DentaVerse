@@ -18,6 +18,7 @@ The coordinator is authoritative for the current workspace, context, profile and
 - Browser development: `http://127.0.0.1:5173`, Vite proxies `/api` and `/ws`.
 - Coordinator HTTP/WebSocket: `127.0.0.1:8000`.
 - Worker TCP: `127.0.0.1:8766`, configurable with `DENTAVERSE_TCP_PORT`.
+- Isolated browser test ports: UI `5174`, coordinator `8001`, worker TCP `8767`; tests never reuse the workstation.
 - Production UI build: `frontend/dist`, served by coordinator when it exists at startup.
 - Persistent journal: `data/dentaverse.db` (ignored), configurable with `DENTAVERSE_DB`.
 - Pose model: `models/pose_landmarker_lite.task` (ignored).

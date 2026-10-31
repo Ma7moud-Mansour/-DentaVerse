@@ -54,7 +54,7 @@ npm.cmd --prefix frontend run build
 npm.cmd --prefix frontend run test:e2e
 ```
 
-Browser tests use Microsoft Edge and a separate ignored SQLite database. Install Edge if unavailable, or run `npx playwright install msedge` from `frontend`. The Python integration suite starts an isolated coordinator process with temporary storage and **synthetic** sensor messages to verify actual TCP/WebSocket transport.
+Browser tests use Microsoft Edge, a separate ignored SQLite database, and dedicated ports 5174/8001/8767. They never reuse the user's running workstation. Install Edge if unavailable, or run `npx playwright install msedge` from `frontend`. The Python integration suite starts an isolated coordinator process with temporary storage and **synthetic** sensor messages to verify actual TCP/WebSocket transport.
 
 ## Files and configuration
 
