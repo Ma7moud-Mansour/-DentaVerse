@@ -43,8 +43,8 @@ class Engine:
             self.state["vision"]["capturing"] = False
             if self.state["session"]["mode"] == "gesture":
                 self._pause("tracking")
-        elif source == "bluetooth" and not connected:
-            self.state["bluetooth"]["status"] = "offline"
+        elif source == "bluetooth":
+            self.state["bluetooth"]["status"] = "idle" if connected else "offline"
 
     def _pause(self, reason: str):
         self.state["session"].update(paused=True, pause_reason=reason)
@@ -172,13 +172,14 @@ class Engine:
                 raise ValueError("Connect the camera worker and complete calibration first")
             s["mode"] = mode
             s["gesture_epoch"] += 1
-        elif action == "save_session":
+        elif action in {"edit_note", "save_session"}:
             note = payload.get("note", "")
             if not isinstance(note, str) or len(note) > 4000:
                 raise ValueError("Reflection must be text of at most 4000 characters")
             s["note"] = note
-            s["saved"] = True
-            self.store.save(s, self.state["profile"]["id"], note)
+            s["saved"] = action == "save_session"
+            if action == "save_session":
+                self.store.save(s, self.state["profile"]["id"], note)
         elif action == "new_session":
             if s["selected_tooth"] is not None and not s["saved"] and payload.get("discard") is not True:
                 raise ValueError("Save the current session or confirm discarding it")

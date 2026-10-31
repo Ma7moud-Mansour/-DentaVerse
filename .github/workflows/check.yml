@@ -1,0 +1,35 @@
+name: Verify DentaVerse
+on: [push, pull_request]
+jobs:
+  core-and-browser:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install core and test dependencies
+        run: |
+          python -m venv .venv
+          .venv/Scripts/python -m pip install -r backend/requirements-core.txt
+          npm --prefix frontend ci
+      - name: Verify backend
+        run: .venv/Scripts/python -m pytest -q
+      - name: Build interface
+        run: npm --prefix frontend run build
+      - name: Install browser
+        working-directory: frontend
+        run: npx playwright install msedge
+      - name: Verify browser journey
+        working-directory: frontend
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v7.0.2
+        if: failure()
+        with:
+          name: browser-diagnostics
+          path: frontend/test-results/

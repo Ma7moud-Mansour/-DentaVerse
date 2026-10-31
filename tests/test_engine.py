@@ -122,3 +122,13 @@ def test_gesture_captured_before_pause_cannot_execute_after_resume(engine):
     with pytest.raises(ValueError, match="predates"):
         send(engine, "GESTURE_RECOGNIZED", {"name": "Z", "score": 0.9, "epoch": old_epoch}, source="vision")
     assert not engine.state["session"]["paused"]
+
+
+def test_editing_saved_reflection_marks_activity_unsaved(engine):
+    send(engine, "select_tooth", {"tooth": 16})
+    send(engine, "save_session", {"note": "First version"})
+    send(engine, "edit_note", {"note": "Unsaved revision"})
+    send(engine, "preview_profile", {"user_id": "DV-STUDENT-02"})
+    assert engine.state["pending_identity"]
+    assert engine.state["profile"]["id"] == "guest"
+    assert engine.snapshot()["journal"][0]["note"] == "First version"

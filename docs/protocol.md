@@ -28,7 +28,7 @@ The timestamp above is illustrative. Send the actual current Unix timestamp. Eve
 |---|---|
 | vision | TRACKING_STATUS, VISION_STATUS, GESTURE_RECOGNIZED, GESTURE_REJECTED |
 | bluetooth | BLE_STATUS, BLE_DEVICES, USER_IDENTIFIED |
-| ui | navigate, select_tooth, isolate, rotate, zoom, layer, tool, move_tool, place_tool, reset, pause, resume, set_mode, save_session, new_session, preview_profile, confirm_identity, cancel_identity |
+| ui | navigate, select_tooth, isolate, rotate, zoom, layer, tool, move_tool, place_tool, reset, pause, resume, set_mode, edit_note, save_session, new_session, preview_profile, confirm_identity, cancel_identity |
 | ui worker controls | ble_scan, ble_connect, ble_disconnect, vision_calibrate, capture_start, capture_stop, capture_cancel, template_record |
 
 Worker controls are validated then forwarded as a `command` frame. Their ACK says `dispatched`, meaning delivery was requested; subsequent sensor status reports provide the operation outcome. Ordinary actions receive `applied`; duplicate events receive `duplicate`; invalid worker events receive `rejected` with an error. Browser validation errors use an `error` message and leave authoritative state unchanged.
