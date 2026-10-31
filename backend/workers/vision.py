@@ -8,6 +8,7 @@ from pathlib import Path
 
 from backend.gestures import GestureLibrary
 from backend.pose import PoseTracker
+from backend.preview import encode_camera_image
 from backend.workers.client import WorkerClient
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -157,8 +158,10 @@ async def run(args):
                     if now - capture.started > 8 or len(capture.points) >= 1000:
                         capture.clear()
                         await transport.emit("GESTURE_REJECTED", {"reason": "Recording timed out. Draw one shape within eight seconds, then finish.", "score": 0.0})
-                if transport.connected.is_set() and now - last_preview >= 0.12:
-                    await transport.emit("POSE_FRAME", tracker.preview(capture.points, now - capture.started if capture.active else 0))
+                if transport.connected.is_set() and now - last_preview >= 1 / 15:
+                    preview = tracker.preview(capture.points, now - capture.started if capture.active else 0)
+                    preview["image"] = encode_camera_image(frame, cv2)
+                    await transport.emit("POSE_FRAME", preview)
                     last_preview = now
                 if tracker.started is not None or capture.active or now - last_status > 3:
                     await publish_status(now)
@@ -199,7 +202,7 @@ def main():
     parser.add_argument("--model", default=str(ROOT / "models" / "pose_landmarker_lite.task"))
     parser.add_argument("--templates", default=str(ROOT / "data" / "templates" / "gestures.json"))
     parser.add_argument("--threshold", type=float, default=0.72, help="Initial hypothesis; evaluate using held-out captures")
-    parser.add_argument("--no-preview", action="store_true", help="Send coordinates to the browser without opening a native preview")
+    parser.add_argument("--no-preview", action="store_true", help="Send live video and coordinates to the browser without a native preview window")
     parser.add_argument("--max-frames", type=int, default=0, help="Optional bounded hardware diagnostic; zero runs until stopped")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)

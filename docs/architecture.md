@@ -11,7 +11,7 @@ flowchart LR
   hub <--> store[SQLite journal]
 ```
 
-The coordinator is authoritative for the current workspace, context, profile and session. The two independent workers reconnect over loopback TCP, authenticate their event source by connection role, and receive current session and control-epoch context. The vision worker owns the camera and the real-template library. Neither raw camera frames nor queued sensor events cross reconnects.
+The coordinator is authoritative for the current workspace, context, profile and session. The two independent workers reconnect over loopback TCP, authenticate their event source by connection role, and receive current session and control-epoch context. The vision worker owns the camera and the real-template library. A bounded mirrored JPEG and its inferred points form one local preview update. Workers never buffer camera frames or sensor events across reconnects; video is not recorded.
 
 ## Local addresses
 

@@ -1,4 +1,6 @@
 import copy
+import base64
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -29,12 +31,16 @@ def test_pose_preview_is_ephemeral_not_history_or_workspace(engine):
     send(engine, "vision_hand", {"hand": "left"})
     before = copy.deepcopy(engine.state["events"])
     checkpoint = engine.store.load_workspace()
+    image = {"data": base64.b64encode((Path(__file__).parent / "fixtures/preview-synthetic.jpg").read_bytes()).decode(), "width": 320, "height": 180}
     for _ in range(30):
-        ack = send(engine, "POSE_FRAME", {"landmarks": [{"x": 0.5, "y": 0.3, "visibility": 1}] * 33}, "vision")
+        ack = send(engine, "POSE_FRAME", {"landmarks": [{"x": 0.5, "y": 0.3, "visibility": 1}] * 33, "image": image}, "vision")
         assert ack["status"] == "preview"
     assert len(engine.state["vision"]["pose"]["landmarks"]) == 33
     assert engine.state["events"] == before
     assert engine.store.load_workspace() == checkpoint
+    send(engine, "vision_hand", {"hand": "right"})
+    assert image["data"] not in str(engine.store.load_workspace())
+    assert engine.state["vision"]["pose"]["image"] == image
     assert "pose" not in str(checkpoint)
     with pytest.raises(ValueError, match="another session"):
         engine.apply(Message(source="vision", type="POSE_FRAME", session_id=str(uuid4()), payload={"landmarks": []}))

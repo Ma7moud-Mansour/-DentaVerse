@@ -31,9 +31,11 @@ export default function CameraSetup({ state, send, onContinue }) {
           online={state.workers.vision}
         />
         <p className="camera-caption">
-          Live coordinates only. Images stay in the camera service.
+          Live camera video with body points, shown only in this local
+          workspace.
           <br />
-          Nothing is recorded until you explicitly save a gesture path.
+          Video is not recorded. Saving a gesture stores its coordinate path
+          only.
         </p>
       </section>
       <section className="card setup-checks">

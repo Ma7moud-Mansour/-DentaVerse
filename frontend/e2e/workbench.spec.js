@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 test.beforeEach(async ({ page }) => {
   // Verify the local application without waiting for an optional font network.
@@ -251,6 +252,7 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
     sessionId,
     epoch;
   const commands = [];
+  let previewTimer;
   const write = (message) => {
     const body = Buffer.from(JSON.stringify(message));
     const header = Buffer.alloc(4);
@@ -278,7 +280,10 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
       if (message.type === "context") epoch = message.epoch;
       if (message.type === "command") {
         commands.push(message);
-        if (message.command === "shutdown") socket.end();
+        if (message.command === "shutdown") {
+          clearInterval(previewTimer);
+          socket.end();
+        }
       }
     }
   });
@@ -306,9 +311,22 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
       y: 0.15 + Math.floor(i / 6) * 0.12,
       visibility: 0.95,
     }));
-    const preview = () =>
-      emit("POSE_FRAME", { landmarks: points, trail: [], capture_points: 0 });
+    const image = {
+      data: readFileSync(
+        new URL("../../tests/fixtures/preview-synthetic.jpg", import.meta.url),
+      ).toString("base64"),
+      width: 320,
+      height: 180,
+    };
+    let previewPayload = {
+      landmarks: points,
+      trail: [],
+      capture_points: 0,
+      image,
+    };
+    const preview = () => emit("POSE_FRAME", previewPayload);
     preview();
+    previewTimer = setInterval(preview, 100);
     await expect(
       page.getByRole("img", { name: "Live body skeleton", exact: true }),
     ).toBeVisible();
@@ -316,6 +334,29 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
       "data-live-joints",
       "33",
     );
+    const video = page.getByRole("img", {
+      name: "Live camera video",
+      exact: true,
+    });
+    await expect(video).toBeVisible();
+    await expect
+      .poll(() =>
+        video.evaluate((img) => img.complete && img.naturalWidth === 320),
+      )
+      .toBe(true);
+    const alignment = await video.evaluate((img) => {
+      const picture = img.getBoundingClientRect(),
+        overlay = img.parentElement
+          .querySelector("svg")
+          .getBoundingClientRect();
+      return (
+        Math.abs(picture.width - overlay.width) +
+        Math.abs(picture.height - overlay.height) +
+        Math.abs(picture.x - overlay.x) +
+        Math.abs(picture.y - overlay.y)
+      );
+    });
+    expect(alignment).toBeLessThan(1);
     await page
       .getByRole("button", { name: "Calibrate position", exact: true })
       .click();
@@ -351,8 +392,9 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
       capture_name: "V",
       dominant_hand: "left",
     });
-    emit("POSE_FRAME", {
+    previewPayload = {
       landmarks: points,
+      image,
       trail: [
         [0.3, 0.3],
         [0.5, 0.7],
@@ -360,7 +402,8 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
       ],
       capture_points: 24,
       capture_elapsed: 1.5,
-    });
+    };
+    preview();
     await expect(
       page.getByRole("status").filter({ hasText: "Recording V · 24 samples" }),
     ).toBeVisible();
@@ -396,6 +439,7 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
     ).toBeEnabled();
     await page.getByRole("button", { name: "Studio", exact: true }).click();
   } finally {
+    clearInterval(previewTimer);
     socket.destroy();
   }
 });

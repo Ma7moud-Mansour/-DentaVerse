@@ -34,6 +34,7 @@ export default function PosePreview({
   const pose = vision.pose;
   const fresh = online && pose && now - pose.timestamp * 1000 < 1800;
   const points = fresh ? pose.landmarks : [];
+  const image = fresh ? pose.image : null;
   const visible = (index) =>
     points[index]?.visibility >= 0.5 &&
     points[index].x >= 0 &&
@@ -47,67 +48,88 @@ export default function PosePreview({
       className={`pose-preview ${small ? "pose-small" : ""}`}
       data-live-joints={count}
     >
-      <svg
-        viewBox="0 0 640 480"
-        role="img"
-        aria-label={count ? "Live body skeleton" : "Camera position guide"}
+      <div
+        className="pose-picture"
+        style={{
+          aspectRatio: image ? `${image.width} / ${image.height}` : "4 / 3",
+        }}
       >
-        <rect
-          x="125"
-          y="45"
-          width="390"
-          height="385"
-          rx="30"
-          className="pose-guide"
-        />
-        {BONES.map(([a, b]) =>
-          visible(a) && visible(b) ? (
-            <line
-              key={`${a}-${b}`}
-              x1={points[a].x * 640}
-              y1={points[a].y * 480}
-              x2={points[b].x * 640}
-              y2={points[b].y * 480}
-              className="pose-bone"
-            />
-          ) : null,
-        )}
-        {points.map((point, index) =>
-          visible(index) ? (
-            <circle
-              key={index}
-              cx={point.x * 640}
-              cy={point.y * 480}
-              r={index === wrist ? 9 : 4}
-              className={index === wrist ? "pose-wrist" : "pose-joint"}
-            />
-          ) : null,
-        )}
-        {fresh && pose.trail?.length > 1 && (
-          <polyline
-            className="pose-trail"
-            points={pose.trail
-              .map(([x, y]) => `${x * 640},${y * 480}`)
-              .join(" ")}
+        {image && (
+          <img
+            className="pose-video"
+            src={`data:image/jpeg;base64,${image.data}`}
+            alt="Live camera video"
+            draggable={false}
           />
         )}
-      </svg>
-      {!count && (
-        <div className="pose-empty">
-          {online ? (
-            <Hand size={small ? 36 : 62} strokeWidth={1} />
-          ) : (
-            <CameraOff size={small ? 30 : 52} strokeWidth={1} />
+        <svg
+          viewBox="0 0 640 480"
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={count ? "Live body skeleton" : "Camera position guide"}
+        >
+          <rect
+            x="125"
+            y="45"
+            width="390"
+            height="385"
+            rx="30"
+            className="pose-guide"
+          />
+          {BONES.map(([a, b]) =>
+            visible(a) && visible(b) ? (
+              <line
+                key={`${a}-${b}`}
+                x1={points[a].x * 640}
+                y1={points[a].y * 480}
+                x2={points[b].x * 640}
+                y2={points[b].y * 480}
+                className="pose-bone"
+              />
+            ) : null,
           )}
-          <p>
-            {!online
-              ? "Start your camera to see live body points."
-              : tracking === "camera_unavailable"
-                ? "Camera unavailable. Check access and retry."
-                : "Keep both shoulders and your chosen wrist in view."}
-          </p>
-        </div>
-      )}
+          {points.map((point, index) =>
+            visible(index) ? (
+              <circle
+                key={index}
+                cx={point.x * 640}
+                cy={point.y * 480}
+                r={index === wrist ? 9 : 4}
+                className={index === wrist ? "pose-wrist" : "pose-joint"}
+              />
+            ) : null,
+          )}
+          {fresh && pose.trail?.length > 1 && (
+            <polyline
+              className="pose-trail"
+              points={pose.trail
+                .map(([x, y]) => `${x * 640},${y * 480}`)
+                .join(" ")}
+            />
+          )}
+        </svg>
+        {!count && !image && (
+          <div className="pose-empty">
+            {online ? (
+              <Hand size={small ? 36 : 62} strokeWidth={1} />
+            ) : (
+              <CameraOff size={small ? 30 : 52} strokeWidth={1} />
+            )}
+            <p>
+              {!online
+                ? "Start your camera to see live body points."
+                : tracking === "camera_unavailable"
+                  ? "Camera unavailable. Check access and retry."
+                  : "Keep both shoulders and your chosen wrist in view."}
+            </p>
+          </div>
+        )}
+        {image && !count && (
+          <div className="pose-position-hint">
+            Keep both shoulders and your chosen wrist in view.
+          </div>
+        )}
+      </div>
       <div className="pose-caption">
         <span className={`status-dot ${online && fresh ? "" : "offline"}`} />
         {count

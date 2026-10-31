@@ -2,7 +2,9 @@
 
 ## Implementation
 
-The vision worker owns one OpenCV camera and MediaPipe Pose Landmarker in VIDEO mode. Inference uses the unmirrored frame so anatomical wrist indices remain correct. Only normalized coordinate/visibility values and a bounded wrist trail travel over TCP/WebSocket. The browser mirrors these points into its SVG preview. It receives no RGB images.
+The vision worker owns one OpenCV camera and MediaPipe Pose Landmarker in VIDEO mode. Inference uses the unmirrored frame so anatomical wrist indices remain correct. At the user's request, live video now accompanies normalized coordinate/visibility values and a bounded wrist trail over loopback TCP/WebSocket. A mirrored JPEG and the points inferred from that same source frame share one POSE_FRAME message, avoiding separate camera owners and mismatched video/points. The browser overlays the SVG on the video with the actual image aspect ratio. No frames are recorded or written to SQLite.
+
+Live JPEGs have a maximum 640×480 bounding box, preserve aspect ratio, and adapt quality/resolution to a 42,000-character base64 budget within the existing 64 KiB message limit. Preview transmission is capped at 15 updates per second; actual frame rate depends on camera/inference speed. Stale frames and points are hidden together. Coordinate-only workers remain supported. The original observations below predate video display and remain a historical record.
 
 Calibration requires both shoulders and the preferred wrist with visibility at least 0.65 and inside the frame. It samples at most 25 times per second, requires at least 12 samples over 0.7 seconds, and accepts only a stable shoulder center/width. It times out after eight seconds. Wrist positions use exponential smoothing (0.35 new / 0.65 previous), reset when tracking is lost, then normalize to the calibrated shoulder center and width. These are initial engineering thresholds, not measured study results.
 
@@ -30,3 +32,9 @@ A subsequent five-preview run of the new diagnostic received frames with no dete
 42 Python tests passed, including stable/moving calibration, preferred wrist, mirroring, ephemeral preview validation, stale gesture rejection, duplicate recording prevention and real Bluetooth worker process start/stop without scanning. Four browser tests passed; the new sensor test uses explicitly synthetic coordinates to verify SVG preview, hand preference, progress, capture feedback, cancellation and explicit recovery.
 
 The synthetic UI screenshot is stored locally under `.review/ui/synthetic-skeleton-capture.png`; it is not live camera evidence.
+
+## Requested live video — 2026-10-31
+
+The updated worker/browser path was exercised on the physical camera with video enabled. Eight distinct frame timestamps were observed during a bounded check, carrying 640×480 JPEGs and 33 landmarks. The largest observed base64 image was 41,800 characters. The browser decoded the real image and confirmed that its displayed rectangle and the SVG rectangle match. The scene/profile/note state survived the coordinator update. Camera and Bluetooth services were left running.
+
+Local verification now passes 44 Python tests and the sensor browser test. The latter decodes an explicitly synthetic 320×180 JPEG to check widescreen aspect/overlay alignment. Encoder tests also check mirroring and the existing 64 KiB transport budget on high-detail noise. Video remains ephemeral; only a local ignored QA screenshot was saved, not a camera recording or a collected gesture template.

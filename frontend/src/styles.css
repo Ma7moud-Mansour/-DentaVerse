@@ -951,10 +951,36 @@ select {
   border-radius: 8px;
   overflow: hidden;
 }
-.pose-preview svg {
+.pose-picture {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+.pose-picture svg,
+.pose-video {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
+}
+.pose-picture svg {
+  pointer-events: none;
+}
+.pose-video {
+  object-fit: fill;
+}
+.pose-position-hint {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  background: #172720d9;
+  color: #fff;
+  padding: 6px;
+  font-size: 11px;
+  text-align: center;
+  border-radius: 4px;
 }
 .pose-guide {
   fill: none;
@@ -964,9 +990,12 @@ select {
 .pose-bone {
   stroke: #b3d4bd;
   stroke-width: 3;
+  filter: drop-shadow(0 1px 2px #172720);
 }
 .pose-joint {
   fill: #dceeb5;
+  stroke: #172720;
+  stroke-width: 1;
 }
 .pose-wrist {
   fill: #f1d895;
@@ -981,7 +1010,7 @@ select {
 }
 .pose-empty {
   position: absolute;
-  inset: 0 0 38px;
+  inset: 0;
   display: grid;
   place-content: center;
   justify-items: center;

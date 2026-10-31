@@ -30,7 +30,7 @@ powershell -File tools/setup.ps1 -WithVision
 powershell -File tools/run.ps1
 ```
 
-Open **Session setup → Start camera**. The page displays live body points without sending camera images to the browser. Choose your preferred hand, keep both shoulders and that wrist in frame, and select **Calibrate position**. Hold your upper body still until stable calibration completes, then enter gesture mode. Stop camera releases the camera and returns to manual input. The camera index selector can try other attached cameras.
+Open **Session setup → Start camera**. The page displays live camera video with body points over the same mirrored frame. Video and coordinates travel only through the local coordinator; frames are kept in memory and are not recorded. Saved gesture templates contain coordinate paths only. Choose your preferred hand, keep both shoulders and that wrist in frame, and select **Calibrate position**. Hold your upper body still until stable calibration completes, then enter gesture mode. Stop camera releases the camera and returns to manual input. The camera index selector can try other attached cameras.
 
 Select **Start Bluetooth service**, then **Discover devices** when ready. A compatible BLE peripheral must advertise the [documented service](docs/ble-peripheral.md); starting the service alone does not scan. Collect actual movement templates before gesture recognition; none are shipped as fake captures. See the [collection and evaluation procedure](docs/gesture-evaluation.md). The optional `-Vision -Bluetooth` launcher flags remain available for terminal use; `-Vision` opens an additional local camera preview.
 

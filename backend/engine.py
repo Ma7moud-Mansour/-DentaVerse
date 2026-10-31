@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from backend.context import LAYERS, content_for
 from backend.protocol import Message, check_fresh
+from backend.preview import validate_camera_image
 from backend.storage import PROFILES, Store
 
 
@@ -388,7 +389,8 @@ class Engine:
         if type(count) is not int or not 0 <= count <= 1000:
             raise ValueError("Invalid capture sample count")
         return {"landmarks": landmarks, "trail": path, "capture_points": count,
-            "capture_elapsed": number(p.get("capture_elapsed", 0), 0, 9), "timestamp": message.timestamp}
+            "capture_elapsed": number(p.get("capture_elapsed", 0), 0, 9), "timestamp": message.timestamp,
+            "image": validate_camera_image(p.get("image"))}
 
     def _bluetooth(self, kind: str, p: dict):
         if kind == "BLE_STATUS":

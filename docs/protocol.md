@@ -41,6 +41,8 @@ Worker controls are validated then forwarded as a `command` frame. Their ACK say
 - Worker: `{"type":"context","session_id":"...","gesture_active":true,"epoch":4,"hand":"right"}`. Workers cancel a capture on context/epoch invalidation.
 - Worker control: `{"type":"command","command":"capture_start","session_id":"...","epoch":4,"payload":{}}`.
 
-No camera frames or personal participant details belong in these messages. The latest 20 applied event labels are included for debugging. They are not research results or a durable clinical audit log.
+POSE_FRAME may now include `image: {data: "base64 JPEG bytes", width: 640, height: 480}` for the requested local live video. The JPEG is mirrored to match the landmark display and comes from the same source frame. Width/height preserve the frame aspect ratio within 640×480; base64 data is bounded to 42,000 characters and validated as JPEG. The complete message still fits the existing 64 KiB limit. Both video and points are ephemeral, excluded from journal/checkpoint/history persistence, and discarded on worker loss. Missing image remains valid for older coordinate-only workers.
+
+Personal participant details do not belong in protocol payloads. The latest 20 applied event labels are included for debugging. They are not research results or a durable clinical audit log.
 
 Service controls launch only fixed Python modules, without a shell, and use the coordinator's actual TCP port. Service status is starting/running/stopping/stopped/error; managed indicates a process owned by this coordinator. Stop sends `shutdown` and waits for exit. A stuck owned process is terminated with a bounded fallback; external workers must honor shutdown or be closed by their operator. Logs are local under ignored `.review/runtime`.
