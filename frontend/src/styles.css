@@ -1284,6 +1284,67 @@ select {
 .specimen-stage .canvas-fallback {
   color: #becaaf;
 }
+.specimen:not(.compact) .three-mount canvas {
+  touch-action: none;
+}
+.specimen-label,
+.anatomy-label,
+.viewer-instructions {
+  pointer-events: none;
+}
+.viewer-instructions {
+  position: absolute;
+  bottom: 4px;
+  left: 22px;
+  right: 22px;
+  display: flex;
+  gap: 9px;
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: 10px;
+  color: #c6d1bc;
+}
+.viewer-instructions span {
+  color: #71886d;
+}
+.model-credit {
+  position: absolute;
+  bottom: 35px;
+  left: 22px;
+  right: 22px;
+  font-size: 8px;
+  color: #9db08f;
+  pointer-events: none;
+}
+.model-credit a {
+  pointer-events: auto;
+  text-underline-offset: 2px;
+}
+.model-credit span {
+  display: block;
+  margin-top: 5px;
+  font-size: 7px;
+  letter-spacing: 0.5px;
+}
+.instrument-grab {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
+  border: 1px dashed #dbeeab99;
+  border-radius: 50%;
+  background: #1d302c22;
+  color: #dbeeab;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+  padding: 0;
+  font-size: 18px;
+}
+.instrument-grab:active:not(:disabled) {
+  cursor: grabbing;
+  transform: translate(-50%, -50%);
+}
 @media (min-width: 1550px) {
   .page {
     padding-top: 65px;

@@ -26,7 +26,7 @@ Buttons have visible keyboard focus. Dialogs make the background inert and trap 
 | Studio | App studio branch | Atlas and setup entry points |
 | Atlas | App atlas branch, ToothMap | Search, FDI selection, isolate |
 | Setup | App setup branch | Worker, visibility and calibration status |
-| Isolated specimen | App workbench, Specimen | Three.js rotation, zoom, layers and instruments |
+| Isolated specimen | App workbench, Specimen | Licensed molar; drag to rotate, wheel to zoom, draggable instrument grip, slider/keyboard alternatives and illustrative tissues |
 | Recovery | App dialog branch | Paused state and explicit resume |
 | Camera unavailable | Setup status/error | Actual worker status, manual route |
 | Reset confirmation | App dialog branch | Retain or reset transforms |

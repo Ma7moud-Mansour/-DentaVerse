@@ -8,7 +8,7 @@ Gesture-based dental anatomy learning workbench for the HCI Phase II project. Th
 - [Progress and verification log](PROGRESS.md)
 - [Rubric evidence and outstanding real-world checks](docs/evidence.md)
 
-Completed code and automated checks do not imply completed participant research, live camera/BLE validation, editable Figma work or anatomical review. The current specimen is visibly labelled as a procedural schematic.
+Completed code and automated checks do not imply completed participant research, live camera/BLE validation, editable Figma work or anatomical review. The external specimen uses a licensed University of Dundee model, mirrored for the right-sided activity. Internal tissue views remain illustrative. [Model attribution and adaptations](frontend/public/models/ATTRIBUTION.md).
 
 ## Quick start on Windows
 
@@ -19,7 +19,7 @@ powershell -File tools/setup.ps1
 powershell -File tools/run.ps1
 ```
 
-Open http://127.0.0.1:8000. The default is a clearly labelled manual guest workspace; no sensors are fabricated. Choose Anatomy atlas → Inspect specimen, turn the model, explore layers, place the mirror, then Finish & review → Save reflection → Open journal.
+Open http://127.0.0.1:8000. The default is a clearly labelled manual guest workspace; no sensors are fabricated. Choose Anatomy atlas → Inspect specimen. Drag the tooth to rotate, scroll over it to zoom, and drag the selected instrument or its circular grip to move it. Focus the viewer and use arrow keys to rotate, or +/- to zoom. Sliders remain available. Then Finish & review → Save reflection → Open journal.
 
 Preferences includes **Manual profile preview** to inspect beginner, experienced and demonstrator content. This is explicitly manual and does not count as Bluetooth evidence. Profile changes preserve ownership and request a decision if an activity is unsaved.
 
@@ -61,7 +61,7 @@ Browser tests use Microsoft Edge, a separate ignored SQLite database, and dedica
 ## Files and configuration
 
 - `backend/`: coordinator, context engine, storage, protocol, classifier and sensor workers.
-- `frontend/`: interface, schematic 3D specimen and browser tests.
+- `frontend/`: interface, licensed molar surface, internal tissue illustrations and browser tests.
 - `docs/`: requirements, scenarios, PACT, research materials, architecture and evidence.
 - `tools/`: setup, run and official model-download tools.
 - `DENTAVERSE_DB`: optional SQLite file path; default `data/dentaverse.db`.

@@ -262,7 +262,7 @@ export default function App() {
                   <div className="specimen-caption">
                     <div>
                       <strong>Upper right first molar</strong>
-                      <small>Schematic study model</small>
+                      <small>Educational anatomy model</small>
                     </div>
                     <span>16</span>
                   </div>
@@ -429,7 +429,11 @@ export default function App() {
                     Reset view <RotateCcw size={13} />
                   </button>
                 </div>
-                <Specimen session={s} />
+                <Specimen
+                  session={s}
+                  disabled={sceneBlocked || !s.isolated}
+                  onAction={send}
+                />
                 <div className="stage-toolbar">
                   <span>
                     {s.tool === "hand" ? "Hand control" : `${s.tool} / active`}
