@@ -109,3 +109,16 @@ def test_saved_session_survives_database_reopen(tmp_path):
     second = Store(path)
     assert second.journal("guest")[0]["note"] == "Retain after restart"
     second.close()
+
+
+def test_gesture_captured_before_pause_cannot_execute_after_resume(engine):
+    engine.worker_status("vision", True)
+    send(engine, "TRACKING_STATUS", {"status": "ready"}, source="vision")
+    send(engine, "VISION_STATUS", {"calibrated": True}, source="vision")
+    send(engine, "set_mode", {"mode": "gesture"})
+    old_epoch = engine.state["session"]["gesture_epoch"]
+    send(engine, "pause")
+    send(engine, "resume")
+    with pytest.raises(ValueError, match="predates"):
+        send(engine, "GESTURE_RECOGNIZED", {"name": "Z", "score": 0.9, "epoch": old_epoch}, source="vision")
+    assert not engine.state["session"]["paused"]

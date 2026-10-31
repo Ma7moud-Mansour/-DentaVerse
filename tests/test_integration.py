@@ -62,7 +62,7 @@ async def test_tcp_worker_event_changes_websocket_context(running_server):
         await write_frame(writer, {"type": "hello", "source": "bluetooth", "version": 1})
         assert (await read_frame(reader))["type"] == "welcome"
         await read_frame(reader)  # Worker context snapshot.
-        event = Message(source="bluetooth", type="USER_IDENTIFIED", payload={"user_id": "DV-STUDENT-02"})
+        event = Message(source="bluetooth", type="USER_IDENTIFIED", session_id=initial["state"]["session"]["id"], payload={"user_id": "DV-STUDENT-02"})
         await write_frame(writer, event)
         changed = await receive_until(browser, lambda m: m["type"] == "state" and m["state"]["profile"]["id"] == "DV-STUDENT-02")
         assert changed["state"]["identity_source"] == "bluetooth"

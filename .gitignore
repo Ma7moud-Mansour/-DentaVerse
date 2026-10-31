@@ -15,5 +15,6 @@ data/*.db
 data/*.db-*
 data/exports/
 data/recordings/
+data/templates/
 models/*.task
 *.log

@@ -85,6 +85,8 @@ class Engine:
             raise ValueError("Session changed; refresh before sending another action")
         if message.source == "vision" and message.type in {"GESTURE_RECOGNIZED", "GESTURE_REJECTED"} and message.session_id != session["id"]:
             raise ValueError("Gesture belongs to a different session")
+        if message.source == "bluetooth" and message.type == "USER_IDENTIFIED" and message.session_id != session["id"]:
+            raise ValueError("Identity read belongs to a previous workspace; reconnect the peripheral")
         # Reject failed actions transactionally, including partial nested changes.
         previous = copy.deepcopy(self.state)
         try:

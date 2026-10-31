@@ -85,6 +85,12 @@ class Hub:
                     ack = await self.dispatch(message)
                 except (ValueError, TypeError, KeyError, ValidationError) as exc:
                     ack = {"type": "ack", "event_id": str(raw.get("event_id", ""))[:100], "status": "rejected", "error": str(exc)[:400]}
+                    if source == "bluetooth" and raw.get("type") == "USER_IDENTIFIED":
+                        self.engine.state["bluetooth"].update(status="error", error=str(exc)[:300])
+                        await self.broadcast()
+                    elif source == "vision" and raw.get("type") == "GESTURE_RECOGNIZED":
+                        self.engine.state["last_gesture"] = {"name": "Rejected", "score": 0.0, "reason": str(exc)[:200]}
+                        await self.broadcast()
                 await write_frame(writer, ack)
         except (ValueError, OSError, asyncio.IncompleteReadError, asyncio.TimeoutError) as exc:
             log.info("Worker closed: %s", type(exc).__name__)
