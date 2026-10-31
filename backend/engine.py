@@ -1,7 +1,7 @@
 import copy
 import math
 from collections import deque
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from backend.context import LAYERS, content_for
 from backend.protocol import Message, check_fresh
@@ -31,6 +31,56 @@ class Engine:
             "last_gesture": None, "events": []}
         self.seen: set[str] = set()
         self.order: deque[str] = deque()
+        self._restore_workspace()
+
+    def checkpoint(self):
+        self.store.save_workspace(self.state["profile"]["id"], self.state["session"], self.state["vision"]["dominant_hand"])
+
+    def _restore_workspace(self):
+        record = self.store.load_workspace()
+        if not record or record.get("version") != 1:
+            return
+        try:
+            profile_id = record.get("profile_id")
+            if not isinstance(profile_id, str) or profile_id not in PROFILES:
+                raise ValueError("Invalid saved profile")
+            saved = record["session"]
+            if not isinstance(saved, dict):
+                raise ValueError("Invalid saved session")
+            s = new_session()
+            s.update({key: saved[key] for key in s if key in saved})
+            UUID(s["id"])
+            if s["screen"] not in {"studio", "atlas", "setup", "workbench", "review", "journal", "guide", "preferences"}:
+                raise ValueError("Invalid saved screen")
+            if s["selected_tooth"] is not None and (type(s["selected_tooth"]) is not int or s["selected_tooth"] != 16):
+                raise ValueError("Invalid saved tooth")
+            if any(type(s[key]) is not bool for key in ["isolated", "paused", "saved"]):
+                raise ValueError("Invalid saved state flags")
+            if s["isolated"] and s["selected_tooth"] != 16:
+                raise ValueError("Invalid isolated specimen")
+            s["rotation"] = {"yaw": number(s["rotation"]["yaw"], -180, 180), "pitch": number(s["rotation"]["pitch"], -80, 80)}
+            s["zoom"] = number(s["zoom"], 0.6, 1.8)
+            s["tool_position"] = {"x": number(s["tool_position"]["x"], -1, 1), "y": number(s["tool_position"]["y"], -1, 1)}
+            if s["layer"] not in LAYERS or s["tool"] not in {"hand", "mirror", "explorer"} or s["mode"] not in {"manual", "gesture"}:
+                raise ValueError("Invalid saved controls")
+            if not isinstance(s["checkpoints"], list) or len(s["checkpoints"]) > 3 or any(p not in {"located", "inspected", "mirror_placed"} for p in s["checkpoints"]):
+                raise ValueError("Invalid saved checkpoints")
+            if not isinstance(s["note"], str) or len(s["note"]) > 4000 or type(s["gesture_epoch"]) is not int or s["gesture_epoch"] < 0:
+                raise ValueError("Invalid saved reflection or epoch")
+            if s["pause_reason"] not in {None, "manual", "tracking"}:
+                raise ValueError("Invalid saved pause state")
+            s["gesture_epoch"] += 1
+            hand = record.get("hand")
+            hand = hand if isinstance(hand, str) and hand in {"left", "right"} else "right"
+            self.state["profile"] = copy.deepcopy(PROFILES[profile_id])
+            self.state["identity_source"] = "restored_session"
+            self.state["session"] = s
+            self.state["vision"]["dominant_hand"] = hand
+            if s["mode"] == "gesture":
+                self._pause("tracking")
+        except (KeyError, ValueError, TypeError, AttributeError):
+            # A malformed checkpoint must not prevent opening the journal.
+            return
 
     def snapshot(self) -> dict:
         return {**copy.deepcopy(self.state), "content": content_for(self.state), "journal": self.store.journal(self.state["profile"]["id"])}
@@ -106,6 +156,8 @@ class Engine:
         if len(self.order) > 2048:
             self.seen.remove(self.order.popleft())
         self.state["events"] = ([{"id": message.event_id, "source": message.source, "type": message.type, "timestamp": message.timestamp}] + self.state["events"])[:20]
+        if message.source == "ui" or message.type in {"USER_IDENTIFIED", "GESTURE_RECOGNIZED"}:
+            self.checkpoint()
         return {"type": "ack", "event_id": message.event_id, "status": "applied"}
 
     def _action(self, action: str, payload: dict):

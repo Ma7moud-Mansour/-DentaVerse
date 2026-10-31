@@ -21,6 +21,7 @@ class Store:
             id TEXT PRIMARY KEY, user_id TEXT NOT NULL, saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             note TEXT NOT NULL, data TEXT NOT NULL)""")
         self.db.execute("CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK(id=1), data TEXT NOT NULL)")
         self.db.commit()
 
     def save(self, session: dict, user_id: str, note: str) -> None:
@@ -38,3 +39,20 @@ class Store:
 
     def close(self):
         self.db.close()
+
+    def save_workspace(self, profile_id: str, session: dict, hand: str = "right") -> None:
+        # Only resumable learning state is stored. Never persist camera landmarks,
+        # worker connections, calibration or Bluetooth discovery results.
+        data = json.dumps({"version": 1, "profile_id": profile_id, "session": session, "hand": hand}, allow_nan=False)
+        self.db.execute("INSERT INTO workspace(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data", (data,))
+        self.db.commit()
+
+    def load_workspace(self) -> dict | None:
+        row = self.db.execute("SELECT data FROM workspace WHERE id=1").fetchone()
+        if row is None:
+            return None
+        try:
+            data = json.loads(row["data"])
+            return data if isinstance(data, dict) else None
+        except (ValueError, TypeError):
+            return None
