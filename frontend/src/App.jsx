@@ -1187,6 +1187,10 @@ function BluetoothPanel({ state, send }) {
             Discover a DentaVerse peripheral and read its registered application
             ID.
           </p>
+          <p>
+            Turn Bluetooth on in Windows first. This service finds DentaVerse
+            BLE peripherals; ordinary paired devices are not listed here.
+          </p>
         </div>
         <Bluetooth size={28} />
       </div>

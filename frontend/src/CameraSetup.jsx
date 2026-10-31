@@ -20,7 +20,9 @@ export default function CameraSetup({ state, send, onContinue }) {
           <span className="tag dark">
             {service.status === "starting"
               ? "Starting camera…"
-              : state.tracking.replaceAll("_", " ")}
+              : state.workers.vision && state.tracking === "lost"
+                ? "Camera on · position your shoulders and wrist"
+                : state.tracking.replaceAll("_", " ")}
           </span>
         </div>
         <PosePreview

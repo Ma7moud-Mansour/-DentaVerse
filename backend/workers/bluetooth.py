@@ -5,6 +5,7 @@ import logging
 import re
 
 from bleak import BleakClient, BleakScanner
+from bleak.exc import BleakBluetoothNotAvailableError, BleakBluetoothNotAvailableReason
 
 from backend.workers.client import WorkerClient
 
@@ -69,7 +70,11 @@ async def run(port: int):
                         peripheral = None
                     await transport.emit("BLE_STATUS", {"status": "disconnected"})
             except Exception as exc:
-                await transport.emit("BLE_STATUS", {"status": "error", "error": str(exc)[:300]})
+                if isinstance(exc, BleakBluetoothNotAvailableError):
+                    error = "Bluetooth is off in Windows. Open Settings > Bluetooth & devices, turn Bluetooth on, then select Discover devices again." if exc.reason == BleakBluetoothNotAvailableReason.POWERED_OFF else str(exc.args[0])
+                else:
+                    error = str(exc)
+                await transport.emit("BLE_STATUS", {"status": "error", "error": error[:300]})
     finally:
         network.cancel()
         await asyncio.gather(network, return_exceptions=True)
