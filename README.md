@@ -27,12 +27,16 @@ Preferences includes **Manual profile preview** to inspect beginner, experienced
 
 ```powershell
 powershell -File tools/setup.ps1 -WithVision
-powershell -File tools/run.ps1 -Vision -Bluetooth
+powershell -File tools/run.ps1
 ```
 
-The vision option opens a local camera preview. No video is recorded or transmitted. A compatible BLE peripheral must advertise the [documented service](docs/ble-peripheral.md); the worker scans only when Discover devices is selected. Collect actual movement templates before gesture mode; none are shipped as fake captures. See the [collection and evaluation procedure](docs/gesture-evaluation.md).
+Open **Session setup → Start camera**. The page displays live body points without sending camera images to the browser. Choose your preferred hand, keep both shoulders and that wrist in frame, and select **Calibrate position**. Hold your upper body still until stable calibration completes, then enter gesture mode. Stop camera releases the camera and returns to manual input. The camera index selector can try other attached cameras.
+
+Select **Start Bluetooth service**, then **Discover devices** when ready. A compatible BLE peripheral must advertise the [documented service](docs/ble-peripheral.md); starting the service alone does not scan. Collect actual movement templates before gesture recognition; none are shipped as fake captures. See the [collection and evaluation procedure](docs/gesture-evaluation.md). The optional `-Vision -Bluetooth` launcher flags remain available for terminal use; `-Vision` opens an additional local camera preview.
 
 Before a live trial, `python tools/check_vision_runtime.py` verifies model/API initialization on a blank image without opening the camera. Run `.venv\Scripts\python.exe -m pip check` to verify the full installation. A successful blank-image check is not evidence of live tracking.
+
+For a bounded real-camera diagnostic, stop any active camera service first, then run `.venv\Scripts\python.exe tools/check_camera_runtime.py --camera 0`. This opens a separate coordinator with isolated storage and an ephemeral TCP port, prints landmark-count/status metadata for 15 previews, and releases the camera. It does not record images, save templates, calibrate a participant or measure gesture accuracy. See the [observed hardware check](docs/camera-verification.md).
 
 ### Development
 

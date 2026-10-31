@@ -14,6 +14,8 @@ class WorkerClient:
         self.session_id = None
         self.gesture_active = False
         self.epoch = 0
+        self.hand = "right"
+        self.generation = 0
         self.commands: asyncio.Queue = asyncio.Queue(maxsize=16)
         self.connected = asyncio.Event()
         self.pending: dict[str, asyncio.Future] = {}
@@ -53,6 +55,8 @@ class WorkerClient:
                 if welcome.get("type") != "welcome":
                     raise ValueError("Coordinator did not accept worker")
                 self.session_id = welcome["session_id"]
+                self.hand = welcome.get("hand", "right")
+                self.generation += 1
                 self.connected.set()
                 log.info("%s connected", self.source)
                 heartbeat = asyncio.create_task(self._heartbeat())
@@ -62,6 +66,7 @@ class WorkerClient:
                         self.session_id = msg["session_id"]
                         self.gesture_active = msg["gesture_active"]
                         self.epoch = msg["epoch"]
+                        self.hand = msg.get("hand", self.hand)
                     elif msg.get("type") == "command":
                         try:
                             self.commands.put_nowait(msg)

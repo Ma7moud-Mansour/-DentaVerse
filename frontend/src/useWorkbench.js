@@ -22,6 +22,15 @@ export function useWorkbench() {
             current.current = message.state;
             setState(message.state);
             setConnected(true); // Authoritative snapshot, not just an open transport.
+          } else if (message.type === "pose") {
+            setState((previous) => {
+              if (!previous || message.session_id !== previous.session.id)
+                return previous;
+              return {
+                ...previous,
+                vision: { ...previous.vision, pose: message.pose },
+              };
+            });
           } else if (message.type === "error") setError(message.error);
         } catch {
           setError(

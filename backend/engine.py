@@ -27,7 +27,9 @@ class Engine:
         self.state = {"profile": copy.deepcopy(PROFILES["guest"]), "identity_source": "manual_guest",
             "pending_identity": None, "session": new_session(), "tracking": "offline",
             "workers": {"vision": False, "bluetooth": False}, "bluetooth": {"status": "offline", "devices": [], "error": None},
-            "vision": {"calibrated": False, "dominant_hand": "right", "capturing": False, "template_counts": {}, "error": None},
+            "vision": {"calibrated": False, "dominant_hand": "right", "capturing": False, "template_counts": {}, "error": None,
+                "calibration_progress": 0.0, "calibration_status": "idle", "capture_name": None, "pending_capture": False, "pose": None},
+            "services": {name: {"status": "stopped", "managed": False, "error": None} for name in ("vision", "bluetooth")},
             "last_gesture": None, "events": []}
         self.seen: set[str] = set()
         self.order: deque[str] = deque()
@@ -87,19 +89,28 @@ class Engine:
 
     def worker_status(self, source: str, connected: bool):
         self.state["workers"][source] = connected
+        self.state["services"][source]["status"] = "running" if connected else "stopped"
         if source == "vision" and not connected:
-            self.state["tracking"] = "offline"
+            if self.state["tracking"] != "camera_unavailable":
+                self.state["tracking"] = "offline"
             self.state["vision"]["calibrated"] = False
             self.state["vision"]["capturing"] = False
+            self.state["vision"]["pending_capture"] = False
+            self.state["vision"]["calibration_status"] = "idle"
+            self.state["vision"]["calibration_progress"] = 0.0
+            self.state["vision"]["pose"] = None
             if self.state["session"]["mode"] == "gesture":
                 self._pause("tracking")
         elif source == "bluetooth":
             self.state["bluetooth"]["status"] = "idle" if connected else "offline"
 
     def _pause(self, reason: str):
+        if self.state["session"]["paused"] and self.state["session"]["pause_reason"] == reason:
+            return
         self.state["session"].update(paused=True, pause_reason=reason)
         self.state["session"]["gesture_epoch"] += 1
         self.state["vision"]["capturing"] = False
+        self.state["vision"]["pending_capture"] = False
 
     def _checkpoint(self, name: str):
         points = self.state["session"]["checkpoints"]
@@ -128,6 +139,11 @@ class Engine:
 
     def apply(self, message: Message) -> dict:
         check_fresh(message)
+        if message.source == "vision" and message.type == "POSE_FRAME":
+            if message.session_id != self.state["session"]["id"]:
+                raise ValueError("Pose frame belongs to another session")
+            self.state["vision"]["pose"] = self._pose(message)
+            return {"type": "ack", "event_id": message.event_id, "status": "preview"}
         if message.event_id in self.seen:
             return {"type": "ack", "event_id": message.event_id, "status": "duplicate"}
         session = self.state["session"]
@@ -245,6 +261,32 @@ class Engine:
             self._switch(pending["id"], pending["source"])
         elif action == "cancel_identity":
             self.state["pending_identity"] = None
+        elif action in {"vision_start", "vision_stop", "ble_start", "ble_stop"}:
+            source = "vision" if action.startswith("vision") else "bluetooth"
+            service = self.state["services"][source]
+            if action.endswith("start"):
+                if self.state["workers"][source] or service["status"] in {"starting", "running", "stopping"}:
+                    raise ValueError("This service is already starting or running")
+                if source == "vision":
+                    camera = payload.get("camera", 0)
+                    if type(camera) is not int or not 0 <= camera <= 4:
+                        raise ValueError("Choose a camera index from 0 to 4")
+                    self.state["vision"]["error"] = None
+                service.update(status="starting", error=None)
+            else:
+                service.update(status="stopping", error=None)
+                if source == "vision":
+                    self.state["vision"].update(calibrated=False, capturing=False, pending_capture=False, pose=None, calibration_status="idle", calibration_progress=0.0)
+                    s["gesture_epoch"] += 1
+                    if s["mode"] == "gesture":
+                        s["mode"] = "manual"
+        elif action == "vision_hand":
+            if payload.get("hand") not in {"left", "right"}:
+                raise ValueError("Choose left or right hand")
+            self.state["vision"].update(dominant_hand=payload["hand"], calibrated=False, calibration_progress=0.0, calibration_status="idle")
+            s["gesture_epoch"] += 1
+            if s["mode"] == "gesture":
+                self._pause("tracking")
         elif action in {"ble_scan", "ble_connect", "ble_disconnect"}:
             if not self.state["workers"]["bluetooth"]:
                 raise ValueError("Start the Bluetooth worker first")
@@ -255,6 +297,11 @@ class Engine:
                 raise ValueError("Start the vision worker first")
             if action == "vision_calibrate" and payload.get("hand", "right") not in {"left", "right"}:
                 raise ValueError("Choose left or right hand")
+            if action == "vision_calibrate":
+                self.state["vision"].update(calibrated=False, calibration_progress=0.0, calibration_status="collecting", capturing=False, pending_capture=False)
+                s["gesture_epoch"] += 1
+                if s["mode"] == "gesture":
+                    self._pause("tracking")
             if action in {"capture_start", "template_record"}:
                 if self.state["tracking"] != "ready" or not self.state["vision"]["calibrated"]:
                     raise ValueError("Calibrate visible shoulder and wrist before recording")
@@ -262,6 +309,10 @@ class Engine:
                     raise ValueError("Enable gesture mode and resume before recording")
             if action == "template_record" and payload.get("name") not in {"V", "circle", "Z"}:
                 raise ValueError("Choose V, circle or Z for the template")
+            if action in {"capture_start", "template_record"}:
+                if self.state["vision"]["capturing"] or self.state["vision"]["pending_capture"]:
+                    raise ValueError("Finish or cancel the current recording first")
+                self.state["vision"]["pending_capture"] = True
         else:
             raise ValueError("Unknown action")
 
@@ -283,8 +334,19 @@ class Engine:
             if p.get("dominant_hand") in {"left", "right"}:
                 self.state["vision"]["dominant_hand"] = p["dominant_hand"]
             self.state["vision"]["capturing"] = bool(p.get("capturing", False))
+            self.state["vision"]["pending_capture"] = False
+            self.state["vision"]["capture_name"] = p.get("capture_name") if p.get("capture_name") in {"V", "circle", "Z"} else None
+            if "calibration_progress" in p:
+                self.state["vision"]["calibration_progress"] = number(p["calibration_progress"], 0, 1)
+            if p.get("calibration_status") in {"idle", "collecting", "ready", "needs_position"}:
+                self.state["vision"]["calibration_status"] = p["calibration_status"]
+            if "error" in p:
+                self.state["vision"]["error"] = str(p.get("error") or "")[:300] or None
             if isinstance(p.get("template_counts"), dict):
-                self.state["vision"]["template_counts"] = p["template_counts"]
+                counts = p["template_counts"]
+                if any(key not in {"V", "circle", "Z"} or type(value) is not int or not 0 <= value <= 300 for key, value in counts.items()):
+                    raise ValueError("Invalid template counts")
+                self.state["vision"]["template_counts"] = counts
         elif kind == "GESTURE_REJECTED":
             self.state["last_gesture"] = {"name": "Rejected", "score": p.get("score", 0), "reason": str(p.get("reason", "No reliable match"))[:200]}
         elif kind == "GESTURE_RECOGNIZED":
@@ -310,6 +372,23 @@ class Engine:
             self.state["last_gesture"] = {"name": name, "score": score, "reason": None}
         else:
             raise ValueError("Unsupported vision event")
+
+    def _pose(self, message):
+        p = message.payload
+        points, trail = p.get("landmarks"), p.get("trail", [])
+        if not isinstance(points, list) or len(points) not in {0, 33} or not isinstance(trail, list) or len(trail) > 200:
+            raise ValueError("Invalid pose preview dimensions")
+        landmarks = [{"x": number(point["x"], -2, 3), "y": number(point["y"], -2, 3), "visibility": number(point["visibility"], 0, 1)} for point in points]
+        path = []
+        for point in trail:
+            if not isinstance(point, list) or len(point) != 2:
+                raise ValueError("Invalid preview trajectory")
+            path.append([number(point[0], -2, 3), number(point[1], -2, 3)])
+        count = p.get("capture_points", 0)
+        if type(count) is not int or not 0 <= count <= 1000:
+            raise ValueError("Invalid capture sample count")
+        return {"landmarks": landmarks, "trail": path, "capture_points": count,
+            "capture_elapsed": number(p.get("capture_elapsed", 0), 0, 9), "timestamp": message.timestamp}
 
     def _bluetooth(self, kind: str, p: dict):
         if kind == "BLE_STATUS":

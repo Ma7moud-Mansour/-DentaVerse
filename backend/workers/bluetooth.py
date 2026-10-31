@@ -34,6 +34,8 @@ async def run(port: int):
                 continue
             try:
                 kind = command["command"]
+                if kind == "shutdown":
+                    return
                 if kind == "ble_scan":
                     await transport.emit("BLE_STATUS", {"status": "scanning"})
                     found = await BleakScanner.discover(timeout=5, service_uuids=[SERVICE_UUID], return_adv=True)

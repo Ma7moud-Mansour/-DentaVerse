@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import net from "node:net";
+import { randomUUID } from "node:crypto";
 
 test.beforeEach(async ({ page }) => {
   // Verify the local application without waiting for an optional font network.
@@ -238,4 +240,162 @@ test("essential navigation fits a narrow screen", async ({ page }) => {
     path: "../.review/ui/mobile-studio.png",
     fullPage: true,
   });
+});
+
+test("synthetic sensor coordinates drive calibration, capture feedback and tracking recovery", async ({
+  page,
+}) => {
+  // Explicit protocol fixture, not a camera recording or accuracy evaluation.
+  const socket = net.createConnection({ host: "127.0.0.1", port: 8767 });
+  let buffer = Buffer.alloc(0),
+    sessionId,
+    epoch;
+  const commands = [];
+  const write = (message) => {
+    const body = Buffer.from(JSON.stringify(message));
+    const header = Buffer.alloc(4);
+    header.writeUInt32BE(body.length);
+    socket.write(Buffer.concat([header, body]));
+  };
+  const emit = (type, payload) =>
+    write({
+      version: 1,
+      source: "vision",
+      type,
+      payload,
+      session_id: sessionId,
+      timestamp: Date.now() / 1000,
+      event_id: randomUUID(),
+    });
+  socket.on("data", (data) => {
+    buffer = Buffer.concat([buffer, data]);
+    while (buffer.length >= 4 && buffer.length >= 4 + buffer.readUInt32BE(0)) {
+      const length = buffer.readUInt32BE(0);
+      const message = JSON.parse(buffer.subarray(4, length + 4).toString());
+      buffer = buffer.subarray(length + 4);
+      if (message.type === "welcome" || message.type === "context")
+        sessionId = message.session_id;
+      if (message.type === "context") epoch = message.epoch;
+      if (message.type === "command") {
+        commands.push(message);
+        if (message.command === "shutdown") socket.end();
+      }
+    }
+  });
+  try {
+    write({ type: "hello", source: "vision", version: 1 });
+    await expect.poll(() => sessionId).toBeTruthy();
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page
+      .getByRole("button", { name: "Session setup", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Stop camera", exact: true }),
+    ).toBeEnabled();
+    await page.getByLabel("Preferred hand").selectOption("left");
+    await expect.poll(() => commands.at(-1)?.command).toBe("vision_hand");
+    expect(commands.at(-1).payload.hand).toBe("left");
+    emit("TRACKING_STATUS", { status: "ready" });
+    emit("VISION_STATUS", {
+      calibrated: false,
+      dominant_hand: "left",
+      template_counts: {},
+    });
+    const points = Array.from({ length: 33 }, (_, i) => ({
+      x: 0.25 + (i % 6) * 0.08,
+      y: 0.15 + Math.floor(i / 6) * 0.12,
+      visibility: 0.95,
+    }));
+    const preview = () =>
+      emit("POSE_FRAME", { landmarks: points, trail: [], capture_points: 0 });
+    preview();
+    await expect(
+      page.getByRole("img", { name: "Live body skeleton", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".pose-preview")).toHaveAttribute(
+      "data-live-joints",
+      "33",
+    );
+    await page
+      .getByRole("button", { name: "Calibrate position", exact: true })
+      .click();
+    await expect.poll(() => commands.at(-1)?.command).toBe("vision_calibrate");
+    emit("VISION_STATUS", {
+      calibrated: false,
+      calibration_status: "collecting",
+      calibration_progress: 0.4,
+      dominant_hand: "left",
+    });
+    await expect(
+      page.getByRole("progressbar", { name: "Calibration progress" }),
+    ).toHaveAttribute("value", "0.4");
+    emit("VISION_STATUS", {
+      calibrated: true,
+      calibration_status: "ready",
+      calibration_progress: 1,
+      dominant_hand: "left",
+    });
+    await page
+      .getByRole("button", { name: "Enter with gestures", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Preferences", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Record V (0)", exact: true })
+      .click();
+    await expect.poll(() => commands.at(-1)?.command).toBe("template_record");
+    emit("VISION_STATUS", {
+      calibrated: true,
+      capturing: true,
+      capture_name: "V",
+      dominant_hand: "left",
+    });
+    emit("POSE_FRAME", {
+      landmarks: points,
+      trail: [
+        [0.3, 0.3],
+        [0.5, 0.7],
+        [0.7, 0.3],
+      ],
+      capture_points: 24,
+      capture_elapsed: 1.5,
+    });
+    await expect(
+      page.getByRole("status").filter({ hasText: "Recording V · 24 samples" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Record circle (0)", exact: true }),
+    ).toBeDisabled();
+    await page.screenshot({
+      path: "../.review/ui/synthetic-skeleton-capture.png",
+      fullPage: true,
+    });
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect.poll(() => commands.at(-1)?.command).toBe("capture_cancel");
+    emit("VISION_STATUS", {
+      calibrated: true,
+      capturing: false,
+      dominant_hand: "left",
+    });
+    emit("TRACKING_STATUS", { status: "lost" });
+    await expect(page.getByRole("dialog")).toBeVisible();
+    expect(epoch).toBeGreaterThan(0);
+    await page
+      .getByRole("button", { name: "Use manual controls", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toBeHidden();
+    await page
+      .getByRole("button", { name: "Session setup", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Stop camera", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Start camera", exact: true }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Studio", exact: true }).click();
+  } finally {
+    socket.destroy();
+  }
 });

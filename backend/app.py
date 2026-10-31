@@ -14,11 +14,13 @@ from pydantic import ValidationError
 from backend.engine import Engine
 from backend.protocol import MAX_FRAME, Message, read_frame, write_frame
 from backend.storage import Store
+from backend.supervisor import WorkerSupervisor
 
 ROOT = Path(__file__).resolve().parents[1]
 log = logging.getLogger("dentaverse")
 CONTROLS = {"ble_scan": "bluetooth", "ble_connect": "bluetooth", "ble_disconnect": "bluetooth",
-    "vision_calibrate": "vision", "capture_start": "vision", "capture_stop": "vision", "capture_cancel": "vision", "template_record": "vision"}
+    "vision_calibrate": "vision", "vision_hand": "vision", "capture_start": "vision", "capture_stop": "vision", "capture_cancel": "vision", "template_record": "vision"}
+SERVICE_ACTIONS = {"vision_start": ("vision", True), "vision_stop": ("vision", False), "ble_start": ("bluetooth", True), "ble_stop": ("bluetooth", False)}
 
 
 class Hub:
@@ -27,9 +29,50 @@ class Hub:
         self.browsers: set[WebSocket] = set()
         self.workers: dict[str, asyncio.StreamWriter] = {}
         self.broadcast_lock = asyncio.Lock()
+        self.closing = False
+        self.jobs = set()
+        self.worker_tasks = set()
+        self.supervisor = WorkerSupervisor(ROOT, 8766, self.service_exit)
+
+    async def service_exit(self, source, code, expected):
+        service = self.engine.state["services"][source]
+        service["managed"] = False
+        if not self.engine.state["workers"][source]:
+            service["status"] = "stopped" if expected or code == 0 else "error"
+        if code != 0 and not expected:
+            service["error"] = "Camera service could not start. Check camera access and setup, then retry." if source == "vision" else "Bluetooth service could not start. Check Bluetooth setup, then retry."
+        await self.broadcast()
+
+    async def service_action(self, source, start, payload):
+        try:
+            if start:
+                await self.supervisor.start(source, payload.get("camera", 0))
+                self.engine.state["services"][source]["managed"] = True
+            else:
+                writer = self.workers.get(source)
+                if writer:
+                    s = self.engine.state["session"]
+                    await write_frame(writer, {"type": "command", "command": "shutdown", "payload": {}, "session_id": s["id"], "epoch": s["gesture_epoch"]})
+                if self.supervisor.owns(source):
+                    await self.supervisor.stop(source)
+                elif writer:
+                    for _ in range(60):
+                        if source not in self.workers:
+                            break
+                        await asyncio.sleep(0.1)
+                    else:
+                        raise ValueError("The external service did not stop. Close its preview or terminal, then retry.")
+                self.engine.state["services"][source].update(status="stopped", managed=False)
+        except (OSError, ValueError, asyncio.TimeoutError) as exc:
+            self.engine.state["services"][source].update(status="error", error=str(exc)[:300])
+        await self.broadcast()
 
     async def broadcast(self):
+        if self.closing:
+            return
         async with self.broadcast_lock:
+            if self.closing:
+                return
             state = self.engine.snapshot()
             for ws in list(self.browsers):
                 try:
@@ -41,7 +84,7 @@ class Hub:
                     except Exception:
                         pass
             s = state["session"]
-            context = {"type": "context", "session_id": s["id"], "gesture_active": s["mode"] == "gesture" and not s["paused"], "epoch": s["gesture_epoch"]}
+            context = {"type": "context", "session_id": s["id"], "gesture_active": s["mode"] == "gesture" and not s["paused"], "epoch": s["gesture_epoch"], "hand": state["vision"]["dominant_hand"]}
             for source, writer in list(self.workers.items()):
                 try:
                     await write_frame(writer, context)
@@ -50,18 +93,35 @@ class Hub:
 
     async def dispatch(self, message: Message) -> dict:
         ack = self.engine.apply(message)
+        if message.source == "vision" and message.type == "POSE_FRAME":
+            async with self.broadcast_lock:
+                for ws in list(self.browsers):
+                    try:
+                        await asyncio.wait_for(ws.send_json({"type": "pose", "session_id": message.session_id, "pose": self.engine.state["vision"]["pose"]}), 2)
+                    except Exception:
+                        self.browsers.discard(ws)
+            return ack
+        if message.type in SERVICE_ACTIONS and ack["status"] == "applied":
+            source, start = SERVICE_ACTIONS[message.type]
+            task = asyncio.create_task(self.service_action(source, start, message.payload))
+            self.jobs.add(task)
+            task.add_done_callback(self.jobs.discard)
+            ack["status"] = "dispatched"
         target = CONTROLS.get(message.type)
         if target and ack["status"] == "applied":
             writer = self.workers.get(target)
-            if writer is None:
+            if writer is None and message.type != "vision_hand":
                 raise ValueError(f"{target} worker is disconnected")
-            await write_frame(writer, {"type": "command", "command": message.type, "payload": message.payload, "session_id": message.session_id, "epoch": self.engine.state["session"]["gesture_epoch"]})
-            ack["status"] = "dispatched"
+            if writer:
+                await write_frame(writer, {"type": "command", "command": message.type, "payload": message.payload, "session_id": message.session_id, "epoch": self.engine.state["session"]["gesture_epoch"]})
+                ack["status"] = "dispatched"
         await self.broadcast()
         return ack
 
     async def handle_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         source = None
+        task = asyncio.current_task()
+        self.worker_tasks.add(task)
         try:
             hello = await read_frame(reader, timeout=5)
             if hello.get("type") != "hello" or hello.get("source") not in {"vision", "bluetooth"} or hello.get("version") != 1:
@@ -71,7 +131,8 @@ class Hub:
                 raise ValueError("This worker is already connected")
             self.workers[source] = writer
             self.engine.worker_status(source, True)
-            await write_frame(writer, {"type": "welcome", "session_id": self.engine.state["session"]["id"]})
+            self.engine.state["services"][source]["managed"] = self.supervisor.owns(source)
+            await write_frame(writer, {"type": "welcome", "session_id": self.engine.state["session"]["id"], "hand": self.engine.state["vision"]["dominant_hand"]})
             await self.broadcast()
             while True:
                 raw = await read_frame(reader)
@@ -95,6 +156,7 @@ class Hub:
         except (ValueError, OSError, asyncio.IncompleteReadError, asyncio.TimeoutError) as exc:
             log.info("Worker closed: %s", type(exc).__name__)
         finally:
+            self.worker_tasks.discard(task)
             if source and self.workers.get(source) is writer:
                 self.workers.pop(source, None)
                 self.engine.worker_status(source, False)
@@ -113,13 +175,25 @@ def create_app(db_path: str | Path | None = None, tcp_port: int | None = None) -
         app.state.hub = Hub(Engine(store))
         server = await asyncio.start_server(app.state.hub.handle_worker, "127.0.0.1", tcp_port if tcp_port is not None else int(os.environ.get("DENTAVERSE_TCP_PORT", "8766")))
         app.state.tcp_port = server.sockets[0].getsockname()[1]
+        app.state.hub.supervisor.port = app.state.tcp_port
         try:
             yield
         finally:
+            app.state.hub.closing = True
+            for task in list(app.state.hub.jobs):
+                task.cancel()
+            await asyncio.gather(*list(app.state.hub.jobs), return_exceptions=True)
+            await app.state.hub.supervisor.close()
             for writer in list(app.state.hub.workers.values()):
                 writer.close()
             server.close()
             await server.wait_closed()
+            tasks = list(app.state.hub.worker_tasks)
+            if tasks:
+                done, pending = await asyncio.wait(tasks, timeout=3)
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
             store.close()
 
     app = FastAPI(title="DentaVerse local coordinator", lifespan=lifespan)

@@ -24,6 +24,8 @@ The coordinator is authoritative for the current workspace, context, profile and
 - Pose model: `models/pose_landmarker_lite.task` (ignored).
 - Real gesture paths: `data/templates/gestures.json` (ignored).
 
+The coordinator can launch either fixed worker through `WorkerSupervisor`; it never executes browser-supplied command text. Start/stop status and process ownership are visible in the UI. Normal shutdown closes owned processes before SQLite. An optional external worker remains supported. Pose previews use a separate lightweight browser channel, retain only the current frame in memory and never enter journal/workspace storage. Workspace checkpoints preserve drafts and controls across coordinator restarts; camera readiness and calibration are always reset.
+
 ## Trust and scope
 
 This is a local, single-operator coursework workstation, not an internet service or multi-tenant account system. Bind it to loopback only. Local workers are trusted processes. BLE selects an educational profile and is not an authentication system. The browser cannot impersonate a sensor source. Allowed browser WebSocket origins are the documented localhost development/production origins.
@@ -42,4 +44,4 @@ The database assigns ownership from server profile state. Browser actions cannot
 
 ## First-delivery limits
 
-A licensed University of Dundee external molar replaces the procedural placeholder. Runtime mirroring adapts the source's left molar to the right-sided activity; anatomy review and validation of the illustrative internal tissue views remain pending. Manual pointer gestures update the scene immediately and send bounded commands through the same server validation as the sliders. Finger pinch is outside the initial vocabulary; the required camera path uses Pose wrist trajectories, with manual start/stop for deliberate recording. Actual camera trials, BLE peripheral trials, participant research, editable Figma source and faculty asset review require separate evidence in the checklist.
+A licensed University of Dundee external molar replaces the procedural placeholder. Runtime mirroring adapts the source's left molar to the right-sided activity; anatomy review and validation of the illustrative internal tissue views remain pending. Manual pointer gestures update the scene immediately and send bounded commands through the same server validation as the sliders. Finger pinch is outside the initial vocabulary; the required camera path uses Pose wrist trajectories, with manual start/stop for deliberate recording. The actual camera runtime check is documented in camera-verification.md. Human gesture trials, BLE peripheral trials, participant research, editable Figma source and faculty asset review require separate evidence in the checklist.

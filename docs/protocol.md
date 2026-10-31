@@ -26,17 +26,21 @@ The timestamp above is illustrative. Send the actual current Unix timestamp. Eve
 
 | Source | Events |
 |---|---|
-| vision | TRACKING_STATUS, VISION_STATUS, GESTURE_RECOGNIZED, GESTURE_REJECTED |
+| vision | TRACKING_STATUS, VISION_STATUS, POSE_FRAME, GESTURE_RECOGNIZED, GESTURE_REJECTED |
 | bluetooth | BLE_STATUS, BLE_DEVICES, USER_IDENTIFIED |
 | ui | navigate, select_tooth, isolate, rotate, zoom, layer, tool, move_tool, place_tool, reset, pause, resume, set_mode, edit_note, save_session, new_session, preview_profile, confirm_identity, cancel_identity |
-| ui worker controls | ble_scan, ble_connect, ble_disconnect, vision_calibrate, capture_start, capture_stop, capture_cancel, template_record |
+| ui worker controls | ble_scan, ble_connect, ble_disconnect, vision_hand, vision_calibrate, capture_start, capture_stop, capture_cancel, template_record |
+| ui service controls | vision_start (camera index 0–4), vision_stop, ble_start, ble_stop |
 
 Worker controls are validated then forwarded as a `command` frame. Their ACK says `dispatched`, meaning delivery was requested; subsequent sensor status reports provide the operation outcome. Ordinary actions receive `applied`; duplicate events receive `duplicate`; invalid worker events receive `rejected` with an error. Browser validation errors use an `error` message and leave authoritative state unchanged.
 
 ## Coordinator messages
 
 - Browser: `{"type":"state","state":{...}}` full state, including active profile, session, context, worker status and this user's journal.
-- Worker: `{"type":"context","session_id":"...","gesture_active":true,"epoch":4}`. Workers cancel a capture on context/epoch invalidation.
+- Browser preview: `{"type":"pose","session_id":"...","pose":{"landmarks":[{"x":0.4,"y":0.3,"visibility":0.9}],"trail":[],"capture_points":0,"capture_elapsed":0,"timestamp":1793450000.0}}`. The shortened example shows one point; actual landmark arrays contain **zero or 33** points. Display coordinates are mirrored; anatomical left/right indices are unchanged. Paths contain at most 200 displayed points. Valid previews use a separate bounded stream, do not enter event history, and do not write SQLite. The browser hides stale points after 1.8 seconds.
+- Worker: `{"type":"context","session_id":"...","gesture_active":true,"epoch":4,"hand":"right"}`. Workers cancel a capture on context/epoch invalidation.
 - Worker control: `{"type":"command","command":"capture_start","session_id":"...","epoch":4,"payload":{}}`.
 
 No camera frames or personal participant details belong in these messages. The latest 20 applied event labels are included for debugging. They are not research results or a durable clinical audit log.
+
+Service controls launch only fixed Python modules, without a shell, and use the coordinator's actual TCP port. Service status is starting/running/stopping/stopped/error; managed indicates a process owned by this coordinator. Stop sends `shutdown` and waits for exit. A stuck owned process is terminated with a bounded fallback; external workers must honor shutdown or be closed by their operator. Logs are local under ignored `.review/runtime`.

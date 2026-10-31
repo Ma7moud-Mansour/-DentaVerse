@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { useWorkbench } from "./useWorkbench";
 import Specimen from "./Specimen";
+import CameraSetup from "./CameraSetup";
+import PosePreview from "./PosePreview";
 
 const TOOLS = [
   ["hand", "Hand control"],
@@ -156,7 +158,9 @@ export default function App() {
                     ? "Identified over Bluetooth"
                     : state.identity_source === "manual_preview"
                       ? "Manual profile preview"
-                      : "Manual guest session"}
+                      : state.identity_source === "restored_session"
+                        ? "Restored local session"
+                        : "Manual guest session"}
                 </small>
               </div>
             </div>
@@ -584,10 +588,26 @@ export default function App() {
                 </div>
                 <div className="inspector-section">
                   <Eyebrow>Gesture control</Eyebrow>
+                  {s.mode === "gesture" && (
+                    <PosePreview
+                      vision={state.vision}
+                      tracking={state.tracking}
+                      online={state.workers.vision}
+                      small
+                    />
+                  )}
+                  <button className="text-button" onClick={() => go("setup")}>
+                    Camera setup
+                  </button>
                   <div className="button-row">
                     <Button
                       secondary
-                      disabled={sceneBlocked || s.mode !== "gesture"}
+                      disabled={
+                        sceneBlocked ||
+                        s.mode !== "gesture" ||
+                        state.vision.capturing ||
+                        state.vision.pending_capture
+                      }
                       onClick={() => send("capture_start")}
                     >
                       Record gesture
@@ -623,101 +643,11 @@ export default function App() {
                 Connect your identity, then prepare a comfortable space for
                 movement.
               </p>
-              <div className="setup-grid">
-                <section className="camera-card">
-                  <div className="section-heading">
-                    <Eyebrow>Camera workspace</Eyebrow>
-                    <span className="tag dark">
-                      {state.tracking.replace("_", " ")}
-                    </span>
-                  </div>
-                  <div className="camera-guide">
-                    <Hand size={100} strokeWidth={1} />
-                    <p>
-                      Keep your shoulders, elbow
-                      <br />
-                      and preferred wrist in view.
-                    </p>
-                  </div>
-                  <p className="camera-caption">
-                    The live preview opens in the local vision worker.
-                    <br />
-                    No camera frames are recorded or sent to the server.
-                  </p>
-                </section>
-                <section className="card setup-checks">
-                  <Eyebrow>Ready when you are</Eyebrow>
-                  <h2>A good start</h2>
-                  <StatusLine
-                    checked={state.workers.vision}
-                    title="Vision worker connected"
-                    text="Local MediaPipe Pose process"
-                  />
-                  <StatusLine
-                    checked={state.tracking === "ready"}
-                    title="Body landmarks visible"
-                    text="Shoulder and wrist required"
-                  />
-                  <StatusLine
-                    checked={state.vision.calibrated}
-                    title="Calibration complete"
-                    text="Stable position and comfortable reach"
-                  />
-                  <label className="field-label">
-                    Preferred hand
-                    <select
-                      aria-label="Preferred hand"
-                      value={state.vision.dominant_hand}
-                      onChange={(e) =>
-                        send("vision_calibrate", { hand: e.target.value })
-                      }
-                    >
-                      <option value="right">Right hand</option>
-                      <option value="left">Left hand</option>
-                    </select>
-                  </label>
-                  <Button
-                    secondary
-                    onClick={() =>
-                      send("vision_calibrate", {
-                        hand: state.vision.dominant_hand,
-                      })
-                    }
-                    disabled={
-                      !state.workers.vision || state.tracking !== "ready"
-                    }
-                  >
-                    Calibrate position <ScanLine size={16} />
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      send("set_mode", { mode: "gesture" });
-                      go("atlas");
-                    }}
-                    disabled={
-                      !state.vision.calibrated || state.tracking !== "ready"
-                    }
-                  >
-                    Enter with gestures <ArrowRight size={16} />
-                  </Button>
-                  <button
-                    className="text-button"
-                    onClick={() => {
-                      send("set_mode", { mode: "manual" });
-                      go("atlas");
-                    }}
-                  >
-                    Continue with mouse & keyboard
-                  </button>
-                  {state.vision.error && (
-                    <p className="inline-error">{state.vision.error}</p>
-                  )}
-                  <small>
-                    Start camera service:{" "}
-                    <code>python -m backend.workers.vision</code>
-                  </small>
-                </section>
-              </div>
+              <CameraSetup
+                state={state}
+                send={send}
+                onContinue={() => go("atlas")}
+              />
               <BluetoothPanel state={state} send={send} />
             </main>
           )}
@@ -957,6 +887,15 @@ export default function App() {
               <section className="card template-card">
                 <Eyebrow>Gesture template collection</Eyebrow>
                 <h2>Teach the recognizer your movements.</h2>
+                <PosePreview
+                  vision={state.vision}
+                  tracking={state.tracking}
+                  online={state.workers.vision}
+                  small
+                />
+                <button className="text-button" onClick={() => go("setup")}>
+                  Open camera setup
+                </button>
                 <p>
                   Calibrate first. Choose a shape, draw it in view, then save
                   the capture. Ask permission before collecting another person's
@@ -969,7 +908,10 @@ export default function App() {
                       secondary
                       onClick={() => send("template_record", { name })}
                       disabled={
-                        !state.vision.calibrated || state.tracking !== "ready"
+                        !state.vision.calibrated ||
+                        state.tracking !== "ready" ||
+                        state.vision.capturing ||
+                        state.vision.pending_capture
                       }
                     >
                       Record {name} ({state.vision.template_counts[name] ?? 0})
@@ -993,6 +935,9 @@ export default function App() {
                   Templates contain coordinate paths, not camera frames. Counts
                   remain zero until real captures are saved.
                 </small>
+                {state.last_gesture?.reason && (
+                  <p role="status">{state.last_gesture.reason}</p>
+                )}
               </section>
               <BluetoothPanel state={state} send={send} />
             </main>
@@ -1017,7 +962,9 @@ export default function App() {
             session ·{" "}
             {state.identity_source === "bluetooth"
               ? "Bluetooth identity"
-              : "Manual identity"}
+              : state.identity_source === "restored_session"
+                ? "Restored identity"
+                : "Manual identity"}
           </span>
         </footer>
       </div>
@@ -1226,6 +1173,10 @@ function ToothMap({ selected, select }) {
   );
 }
 function BluetoothPanel({ state, send }) {
+  const service = state.services?.bluetooth ?? { status: "stopped" };
+  const active =
+    state.workers.bluetooth ||
+    ["starting", "running", "stopping"].includes(service.status);
   return (
     <section className="card bluetooth-panel">
       <div className="section-heading">
@@ -1240,6 +1191,24 @@ function BluetoothPanel({ state, send }) {
         <Bluetooth size={28} />
       </div>
       <div className="button-row">
+        <Button
+          secondary
+          disabled={!state.services || active}
+          onClick={() => send("ble_start")}
+        >
+          {service.status === "starting"
+            ? "Starting…"
+            : "Start Bluetooth service"}
+        </Button>
+        <Button
+          secondary
+          disabled={!active || service.status === "stopping"}
+          onClick={() => send("ble_stop")}
+        >
+          {service.status === "stopping"
+            ? "Stopping…"
+            : "Stop Bluetooth service"}
+        </Button>
         <Button
           secondary
           onClick={() => send("ble_scan")}
@@ -1275,8 +1244,16 @@ function BluetoothPanel({ state, send }) {
           {state.bluetooth.error}
         </p>
       )}
+      {service.error && (
+        <p className="inline-error" role="status">
+          {service.error}
+        </p>
+      )}
+      {!state.services && (
+        <p role="status">Restart the local server to enable service buttons.</p>
+      )}
       <small>
-        Start identity service: <code>python -m backend.workers.bluetooth</code>
+        Device discovery runs only when you select Discover devices.
       </small>
     </section>
   );

@@ -83,3 +83,44 @@ async def test_browser_cannot_impersonate_sensor(running_server):
         await browser.send(Message(source="bluetooth", type="USER_IDENTIFIED", session_id=initial["state"]["session"]["id"], payload={"user_id": "DV-STUDENT-02"}).model_dump_json())
         error = await receive_until(browser, lambda m: m["type"] == "error")
         assert "UI source" in error["error"]
+
+
+async def test_owned_bluetooth_worker_starts_and_stops_without_scanning(running_server):
+    http, _ = running_server
+    async with websockets.connect(f"ws://127.0.0.1:{http}/ws", origin="http://127.0.0.1:5173") as browser:
+        initial = await receive_until(browser, lambda m: m["type"] == "state")
+        session_id = initial["state"]["session"]["id"]
+        try:
+            event = Message(source="ui", type="ble_start", session_id=session_id)
+            await browser.send(event.model_dump_json())
+            running = await receive_until(browser, lambda m: m["type"] == "state" and m["state"]["workers"]["bluetooth"])
+            assert running["state"]["services"]["bluetooth"]["managed"]
+            assert running["state"]["bluetooth"]["status"] == "idle"
+            assert running["state"]["bluetooth"]["devices"] == []
+            await browser.send(event.model_dump_json())
+            duplicate = await receive_until(browser, lambda m: m["type"] == "ack" and m.get("status") == "duplicate")
+            assert duplicate["event_id"] == event.event_id
+        finally:
+            await browser.send(Message(source="ui", type="ble_stop", session_id=session_id).model_dump_json())
+            stopped = await receive_until(browser, lambda m: m["type"] == "state" and not m["state"]["workers"]["bluetooth"] and not m["state"]["services"]["bluetooth"]["managed"])
+            assert stopped["state"]["services"]["bluetooth"]["status"] == "stopped"
+
+
+async def test_synthetic_pose_uses_lightweight_browser_channel(running_server):
+    http, tcp = running_server
+    async with websockets.connect(f"ws://127.0.0.1:{http}/ws", origin="http://127.0.0.1:5173") as browser:
+        initial = await receive_until(browser, lambda m: m["type"] == "state")
+        reader, writer = await asyncio.open_connection("127.0.0.1", tcp)
+        try:
+            await write_frame(writer, {"type": "hello", "source": "vision", "version": 1})
+            await read_frame(reader)
+            await read_frame(reader)
+            await receive_until(browser, lambda m: m["type"] == "state" and m["state"]["workers"]["vision"])
+            await write_frame(writer, Message(source="vision", type="POSE_FRAME", session_id=initial["state"]["session"]["id"], payload={"landmarks": [{"x": 0.5, "y": 0.3, "visibility": 1}] * 33}))
+            preview = await receive_until(browser, lambda m: m["type"] == "pose")
+            assert len(preview["pose"]["landmarks"]) == 33
+            assert "state" not in preview
+            assert (await read_frame(reader))["status"] == "preview"
+        finally:
+            writer.close()
+            await writer.wait_closed()

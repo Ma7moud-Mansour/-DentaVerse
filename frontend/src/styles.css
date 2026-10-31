@@ -942,6 +942,110 @@ select {
   text-align: center;
   margin-top: 22px;
 }
+.pose-preview {
+  position: relative;
+  width: 100%;
+  margin: auto 0;
+  color: #dceeb5;
+  background: #172720;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.pose-preview svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pose-guide {
+  fill: none;
+  stroke: #6d815c;
+  stroke-dasharray: 8 8;
+}
+.pose-bone {
+  stroke: #b3d4bd;
+  stroke-width: 3;
+}
+.pose-joint {
+  fill: #dceeb5;
+}
+.pose-wrist {
+  fill: #f1d895;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.pose-trail {
+  fill: none;
+  stroke: #f1d895;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.pose-empty {
+  position: absolute;
+  inset: 0 0 38px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: 22px;
+}
+.pose-empty p {
+  color: #c4d3ba;
+  max-width: 220px;
+  font-size: 12px;
+}
+.pose-caption {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 10px 14px;
+  font-size: 10px;
+  background: #233b30;
+}
+.pose-caption > span:last-child {
+  margin-left: auto;
+}
+.capture-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  padding: 8px;
+  border-radius: 4px;
+  color: #172720;
+  background: #f1d895;
+  font-size: 11px;
+  text-align: center;
+}
+.pose-small {
+  max-width: 380px;
+  margin: 14px 0;
+}
+.pose-small .pose-empty p {
+  font-size: 10px;
+  margin: 8px 0;
+}
+.pose-small .pose-caption {
+  font-size: 9px;
+}
+.camera-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.calibration-progress {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.calibration-progress progress {
+  width: 100%;
+  accent-color: #6c8444;
+}
+.calibration-progress small {
+  color: #67745e;
+}
 .setup-checks h2 {
   margin: 9px 0 26px;
 }
