@@ -32,6 +32,8 @@ powershell -File tools/run.ps1 -Vision -Bluetooth
 
 The vision option opens a local camera preview. No video is recorded or transmitted. A compatible BLE peripheral must advertise the [documented service](docs/ble-peripheral.md); the worker scans only when Discover devices is selected. Collect actual movement templates before gesture mode; none are shipped as fake captures. See the [collection and evaluation procedure](docs/gesture-evaluation.md).
 
+Before a live trial, `python tools/check_vision_runtime.py` verifies model/API initialization on a blank image without opening the camera. Run `.venv\Scripts\python.exe -m pip check` to verify the full installation. A successful blank-image check is not evidence of live tracking.
+
 ### Development
 
 Run these commands in separate terminals from the repository root:

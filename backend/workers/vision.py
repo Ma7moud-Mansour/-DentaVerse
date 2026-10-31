@@ -210,6 +210,8 @@ def main():
         asyncio.run(run(args))
     except KeyboardInterrupt:
         pass
+    except ImportError as exc:
+        raise SystemExit(f"Vision dependencies are incomplete: {exc}. Run powershell -File tools/setup.ps1 -WithVision and retry.") from exc
 
 
 if __name__ == "__main__":

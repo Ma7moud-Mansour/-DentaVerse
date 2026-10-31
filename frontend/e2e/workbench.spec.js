@@ -1,5 +1,12 @@
 import { test, expect } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  // Verify the local application without waiting for an optional font network.
+  await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) =>
+    route.abort(),
+  );
+});
+
 test("manual learning flow saves a reflection and switches context without sharing notes", async ({
   page,
 }) => {
