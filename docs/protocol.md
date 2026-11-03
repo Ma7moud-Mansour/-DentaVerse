@@ -36,6 +36,8 @@ Worker controls are validated then forwarded as a `command` frame. Their ACK say
 
 ## Coordinator messages
 
+The preview now carries `hand_tracking: true` and `hands: [...]`. It permits at most two distinct left/right IDs, exactly 21 finite x/y/z landmarks per hand, and bounded finger/pose/motion features. Each hand includes a debounced gesture state, five finger booleans, extended-finger count, normalized pinch ratio, palm center, roll and per-frame motion deltas. `score` is the handedness probability for the emitted side, not a positional-accuracy score. Missing hands must be an empty array; no prior hand pose is replayed. Body points remain in the same packet, separately selectable in the UI. See [hand signals](hand-tracking.md).
+
 - Browser: `{"type":"state","state":{...}}` full state, including active profile, session, context, worker status and this user's journal.
 - Browser preview: `{"type":"pose","session_id":"...","pose":{"landmarks":[{"x":0.4,"y":0.3,"visibility":0.9}],"trail":[],"capture_points":0,"capture_elapsed":0,"timestamp":1793450000.0}}`. The shortened example shows one point; actual landmark arrays contain **zero or 33** points. Display coordinates are mirrored; anatomical left/right indices are unchanged. Paths contain at most 200 displayed points. Valid previews use a separate bounded stream, do not enter event history, and do not write SQLite. The browser hides stale points after 1.8 seconds.
 - Worker: `{"type":"context","session_id":"...","gesture_active":true,"epoch":4,"hand":"right"}`. Workers cancel a capture on context/epoch invalidation.

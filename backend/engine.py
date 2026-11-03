@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from backend.context import LAYERS, content_for
 from backend.protocol import Message, check_fresh
 from backend.preview import validate_camera_image
+from backend.hands import validate_hands
 from backend.storage import PROFILES, Store
 
 
@@ -90,7 +91,8 @@ class Engine:
 
     def worker_status(self, source: str, connected: bool):
         self.state["workers"][source] = connected
-        self.state["services"][source]["status"] = "running" if connected else "stopped"
+        service = self.state["services"][source]
+        service["status"] = "running" if connected else "stopping" if service["managed"] and service["status"] == "stopping" else "starting" if service["managed"] else "stopped"
         if source == "vision" and not connected:
             if self.state["tracking"] != "camera_unavailable":
                 self.state["tracking"] = "offline"
@@ -266,7 +268,7 @@ class Engine:
             source = "vision" if action.startswith("vision") else "bluetooth"
             service = self.state["services"][source]
             if action.endswith("start"):
-                if self.state["workers"][source] or service["status"] in {"starting", "running", "stopping"}:
+                if self.state["workers"][source] or service["managed"] or service["status"] in {"starting", "running", "stopping"}:
                     raise ValueError("This service is already starting or running")
                 if source == "vision":
                     camera = payload.get("camera", 0)
@@ -275,6 +277,8 @@ class Engine:
                     self.state["vision"]["error"] = None
                 service.update(status="starting", error=None)
             else:
+                if service["status"] == "stopping":
+                    raise ValueError("This service is already stopping")
                 service.update(status="stopping", error=None)
                 if source == "vision":
                     self.state["vision"].update(calibrated=False, capturing=False, pending_capture=False, pose=None, calibration_status="idle", calibration_progress=0.0)
@@ -390,7 +394,8 @@ class Engine:
             raise ValueError("Invalid capture sample count")
         return {"landmarks": landmarks, "trail": path, "capture_points": count,
             "capture_elapsed": number(p.get("capture_elapsed", 0), 0, 9), "timestamp": message.timestamp,
-            "image": validate_camera_image(p.get("image"))}
+            "image": validate_camera_image(p.get("image")), "hands": validate_hands(p.get("hands", [])),
+            "hand_tracking": p.get("hand_tracking") is True}
 
     def _bluetooth(self, kind: str, p: dict):
         if kind == "BLE_STATUS":

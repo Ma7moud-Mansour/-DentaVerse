@@ -9,6 +9,7 @@ export default function CameraSetup({ state, send, onContinue }) {
   const service = state.services?.vision ?? { status: "stopped" };
   const active =
     state.workers.vision ||
+    service.managed ||
     ["starting", "running", "stopping"].includes(service.status);
   const collecting = vision.calibration_status === "collecting";
   const ready = state.tracking === "ready" && vision.calibrated;
@@ -16,13 +17,15 @@ export default function CameraSetup({ state, send, onContinue }) {
     <div className="setup-grid">
       <section className="camera-card">
         <div className="section-heading">
-          <div className="eyebrow">Live body tracking</div>
+          <div className="eyebrow">Live hand tracking</div>
           <span className="tag dark">
             {service.status === "starting"
               ? "Starting camera…"
-              : state.workers.vision && state.tracking === "lost"
-                ? "Camera on · position your shoulders and wrist"
-                : state.tracking.replaceAll("_", " ")}
+              : vision.pose?.hand_tracking
+                ? `${vision.pose.hands.length}/2 hands detected`
+                : state.workers.vision && state.tracking === "lost"
+                  ? "Camera on · position your shoulders and wrist"
+                  : state.tracking.replaceAll("_", " ")}
           </span>
         </div>
         <PosePreview
@@ -31,8 +34,8 @@ export default function CameraSetup({ state, send, onContinue }) {
           online={state.workers.vision}
         />
         <p className="camera-caption">
-          Live camera video with body points, shown only in this local
-          workspace.
+          Live camera video with fingers and hand tracking, shown only in this
+          local workspace.
           <br />
           Video is not recorded. Saving a gesture stores its coordinate path
           only.
@@ -75,6 +78,18 @@ export default function CameraSetup({ state, send, onContinue }) {
             ))}
           </select>
         </label>
+        <p className="hand-setup-help">
+          Both hands are tracked automatically, with 21 points per hand. Keep
+          every fingertip in view. Body calibration below is only for recorded
+          wrist-path gestures.
+        </p>
+        {vision.pose?.hand_tracking && (
+          <ReadyLine
+            checked={vision.pose.hands.length === 2}
+            title="Both hands visible"
+            text={`${vision.pose.hands.length}/2 hands detected · no hand calibration required`}
+          />
+        )}
         <ReadyLine
           checked={state.workers.vision}
           title="Camera connected"

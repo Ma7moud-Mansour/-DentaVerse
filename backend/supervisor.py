@@ -32,6 +32,8 @@ class WorkerSupervisor:
                 raise ValueError("Camera dependencies are missing. Run setup with -WithVision first.")
             if not (self.root / "models" / "pose_landmarker_lite.task").is_file():
                 raise ValueError("Download the Pose model before starting the camera.")
+            if not (self.root / "models" / "hand_landmarker.task").is_file():
+                raise ValueError("Hand model missing. Run python tools/download_hand_model.py, then retry.")
         args = [sys.executable, "-m", MODULES[source], "--port", str(self.port)]
         if source == "vision":
             args += ["--camera", str(camera), "--no-preview"]

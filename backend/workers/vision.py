@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from backend.gestures import GestureLibrary
+from backend.hands import HandTracker, CONNECTIONS as HAND_CONNECTIONS
 from backend.pose import PoseTracker
 from backend.preview import encode_camera_image
 from backend.workers.client import WorkerClient
@@ -44,8 +45,11 @@ async def run(args):
 
     if not Path(args.model).is_file():
         raise SystemExit("Pose model missing. Run: python tools/download_pose_model.py")
+    if not Path(args.hand_model).is_file():
+        raise SystemExit("Hand model missing. Run: python tools/download_hand_model.py")
     library = GestureLibrary(args.templates, args.threshold)
     tracker, capture = PoseTracker(), Capture()
+    hand_tracker = HandTracker()
     transport = WorkerClient("vision", args.port)
     network = asyncio.create_task(transport.run())
     cam = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW) if __import__('sys').platform == 'win32' else cv2.VideoCapture(args.camera)
@@ -72,7 +76,10 @@ async def run(args):
         options = mp.tasks.vision.PoseLandmarkerOptions(base_options=mp.tasks.BaseOptions(model_asset_path=str(args.model)),
             running_mode=mp.tasks.vision.RunningMode.VIDEO, num_poses=1,
             min_pose_detection_confidence=0.6, min_pose_presence_confidence=0.6, min_tracking_confidence=0.6)
-        with mp.tasks.vision.PoseLandmarker.create_from_options(options) as landmarker:
+        hand_options = mp.tasks.vision.HandLandmarkerOptions(base_options=mp.tasks.BaseOptions(model_asset_path=str(args.hand_model)),
+            running_mode=mp.tasks.vision.RunningMode.VIDEO, num_hands=2,
+            min_hand_detection_confidence=0.65, min_hand_presence_confidence=0.65, min_tracking_confidence=0.65)
+        with mp.tasks.vision.PoseLandmarker.create_from_options(options) as landmarker, mp.tasks.vision.HandLandmarker.create_from_options(hand_options) as hand_landmarker:
             while True:
                 ok, frame = await asyncio.to_thread(cam.read)
                 if not ok:
@@ -80,22 +87,41 @@ async def run(args):
                     break
                 now = time.monotonic()
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                result = landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(now * 1000))
+                camera_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+                result = landmarker.detect_for_video(camera_image, int(now * 1000))
+                hand_result = hand_landmarker.detect_for_video(camera_image, int(now * 1000))
+                detections = []
+                for index, landmarks in enumerate(hand_result.hand_landmarks):
+                    category = hand_result.handedness[index][0]
+                    hand_points = []
+                    for p in landmarks:
+                        if not all(math.isfinite(v) for v in (p.x,p.y,p.z)):
+                            break
+                        hand_points.append({"x": round(max(-2,min(3,1-p.x)),6), "y": round(max(-2,min(3,p.y)),6), "z": round(max(-2,min(2,p.z)),6)})
+                    if len(hand_points) != 21 or category.category_name.lower() not in {"left","right"}:
+                        continue
+                    world = [(p.x,p.y,p.z) for p in hand_result.hand_world_landmarks[index]]
+                    if len(world) != 21 or not all(math.isfinite(v) for p in world for v in p):
+                        world = None
+                    detections.append({"handedness": category.category_name.lower(), "score": float(category.score), "landmarks": hand_points, "world": world})
                 points = []
                 if result.pose_landmarks:
                     for point in result.pose_landmarks[0]:
                         x, y, visibility = float(point.x), float(point.y), float(point.visibility or 0)
                         if not all(math.isfinite(v) for v in (x, y, visibility)):
                             x, y, visibility = 0.0, 0.0, 0.0
-                        points.append({"x": max(-2, min(3, x)), "y": max(-2, min(3, y)), "visibility": max(0, min(1, visibility))})
+                        points.append({"x": round(max(-2, min(3, x)),6), "y": round(max(-2, min(3, y)),6), "visibility": round(max(0, min(1, visibility)),6)})
                 if generation != transport.generation:
                     generation = transport.generation
                     tracker.set_hand(transport.hand)
+                    hand_tracker.reset()
                     capture.clear()
                     previous_status = None
                 if previous_session != transport.session_id:
                     previous_session = transport.session_id
                     capture.clear()
+                    hand_tracker.reset()
+                hands = hand_tracker.update(detections, now, frame.shape[1] / frame.shape[0])
                 tracker.observe(points, now)
                 if capture.active and (not tracker.ready or not tracker.calibrated or not transport.connected.is_set()
                         or capture.session_id != transport.session_id or capture.epoch != transport.epoch
@@ -160,6 +186,8 @@ async def run(args):
                         await transport.emit("GESTURE_REJECTED", {"reason": "Recording timed out. Draw one shape within eight seconds, then finish.", "score": 0.0})
                 if transport.connected.is_set() and now - last_preview >= 1 / 15:
                     preview = tracker.preview(capture.points, now - capture.started if capture.active else 0)
+                    preview["hands"] = hands
+                    preview["hand_tracking"] = True
                     preview["image"] = encode_camera_image(frame, cv2)
                     await transport.emit("POSE_FRAME", preview)
                     last_preview = now
@@ -174,6 +202,13 @@ async def run(args):
                             pixel = lambda i: (int((1 - points[i]["x"]) * w), int(points[i]["y"] * h))
                             cv2.line(display, pixel(a), pixel(b), (171, 238, 219), 2)
                             cv2.circle(display, pixel(a), 4, (171, 238, 219), -1)
+                    for hand in hands:
+                        hand_pixel = lambda i: (int(hand["landmarks"][i]["x"] * w), int(hand["landmarks"][i]["y"] * h))
+                        color = (220,210,80) if hand["id"] == "left" else (80,210,250)
+                        for a,b in HAND_CONNECTIONS:
+                            cv2.line(display, hand_pixel(a), hand_pixel(b), color, 2)
+                        for i in range(21):
+                            cv2.circle(display, hand_pixel(i), 3, color, -1)
                     cv2.putText(display, f"DentaVerse | {tracker.hand} wrist | {status} | {'calibrated' if tracker.calibrated else 'calibrate in browser'}", (15,25), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (210,240,220), 1)
                     cv2.imshow("DentaVerse Pose - Q to close", display)
                     if cv2.waitKey(1) & 0xff == ord('q'):
@@ -200,6 +235,7 @@ def main():
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--camera", type=int, default=0)
     parser.add_argument("--model", default=str(ROOT / "models" / "pose_landmarker_lite.task"))
+    parser.add_argument("--hand-model", default=str(ROOT / "models" / "hand_landmarker.task"))
     parser.add_argument("--templates", default=str(ROOT / "data" / "templates" / "gestures.json"))
     parser.add_argument("--threshold", type=float, default=0.72, help="Initial hypothesis; evaluate using held-out captures")
     parser.add_argument("--no-preview", action="store_true", help="Send live video and coordinates to the browser without a native preview window")

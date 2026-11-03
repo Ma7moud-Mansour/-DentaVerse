@@ -32,6 +32,7 @@ class Hub:
         self.closing = False
         self.jobs = set()
         self.worker_tasks = set()
+        self.service_locks = {source: asyncio.Lock() for source in ("vision", "bluetooth")}
         self.supervisor = WorkerSupervisor(ROOT, 8766, self.service_exit)
 
     async def service_exit(self, source, code, expected):
@@ -44,6 +45,10 @@ class Hub:
         await self.broadcast()
 
     async def service_action(self, source, start, payload):
+        async with self.service_locks[source]:
+            await self._service_action(source, start, payload)
+
+    async def _service_action(self, source, start, payload):
         try:
             if start:
                 await self.supervisor.start(source, payload.get("camera", 0))

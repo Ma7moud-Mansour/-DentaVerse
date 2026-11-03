@@ -956,6 +956,119 @@ select {
   width: 100%;
   overflow: hidden;
 }
+.pose-overlay-controls {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  background: #233b30;
+}
+.pose-overlay-controls button {
+  flex: 1;
+  border: 1px solid #61715c;
+  border-radius: 4px;
+  padding: 8px;
+  min-height: 34px;
+  background: transparent;
+  color: #e5eddc;
+  font-size: 11px;
+}
+.pose-overlay-controls button[aria-pressed="true"] {
+  background: #dceeb5;
+  color: #172720;
+  border-color: #dceeb5;
+}
+.hand-skeleton {
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 1px 1px #101c18);
+}
+.hand-left {
+  --hand-color: #78d4ff;
+}
+.hand-right {
+  --hand-color: #ffcf73;
+}
+.hand-skeleton line {
+  stroke: var(--hand-color);
+}
+.hand-skeleton circle {
+  fill: var(--hand-color);
+  stroke: #172720;
+  stroke-width: 1;
+}
+.hand-skeleton text {
+  fill: var(--hand-color);
+  stroke: #172720;
+  stroke-width: 3;
+  paint-order: stroke;
+  font-size: 17px;
+  font-weight: 600;
+}
+.hand-readouts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px;
+  background: #172720;
+}
+.hand-readout {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #465a49;
+  border-top: 2px solid var(--hand-color);
+  border-radius: 4px;
+  min-width: 0;
+}
+.hand-readout strong {
+  color: var(--hand-color);
+  font-size: 12px;
+}
+.hand-readout > span {
+  font-size: 11px;
+  color: #fff;
+}
+.hand-readout small {
+  color: #c6d4be;
+  font-size: 10px;
+}
+.finger-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.finger-indicators span {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 18px;
+  border-radius: 3px;
+  border: 1px solid #687960;
+  font-size: 9px;
+  color: #a0b097;
+}
+.finger-indicators .extended {
+  background: var(--hand-color);
+  color: #172720;
+  border-color: var(--hand-color);
+}
+.hand-setup-help {
+  font-size: 12px;
+  color: #65705d;
+  line-height: 1.7;
+  margin: 18px 0;
+}
+.pose-overlay-controls ~ .capture-indicator {
+  top: 58px;
+}
+.camera-card {
+  align-self: start;
+  min-height: 0;
+}
+.camera-card .pose-preview {
+  margin: 18px 0 0;
+}
 .pose-picture svg,
 .pose-video {
   position: absolute;

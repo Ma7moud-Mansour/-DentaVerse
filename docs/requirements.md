@@ -42,7 +42,7 @@ The first complete learning activity is: identify tooth 16, inspect its form, ex
 
 ## Deferred scope
 
-Full treatment simulation, diagnosis, scoring clinical performance, recognizing physical dental instruments, a full 3D dentition, cloud accounts, instructor rosters and mobile delivery. Hand/finger pinch is optional after required Pose and DollarPy functionality is verified; the MVP vocabulary uses deliberately recorded V, circle and Z paths.
+Full treatment simulation, diagnosis, scoring clinical performance, recognizing physical dental instruments, a full 3D dentition, cloud accounts, instructor rosters and mobile delivery. The user explicitly expanded scope to both hands and all fingers: dedicated Hand Landmarker, live per-hand pose/motion signals and independent overlays are now required. Binding those signals to scene commands and physically validating them remain separate tasks. The existing DollarPy vocabulary uses deliberately recorded V, circle and Z paths.
 
 ## Open rubric questions
 

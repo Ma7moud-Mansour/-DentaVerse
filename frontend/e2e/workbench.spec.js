@@ -357,6 +357,60 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
       );
     });
     expect(alignment).toBeLessThan(1);
+    const signals = JSON.parse(
+      readFileSync(
+        new URL(
+          "../../tests/fixtures/hand-signals-synthetic.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    previewPayload = {
+      ...previewPayload,
+      hand_tracking: true,
+      hands: signals.open,
+    };
+    preview();
+    await expect(page.locator(".pose-preview")).toHaveAttribute(
+      "data-live-hands",
+      "2",
+    );
+    await expect(
+      page.getByRole("img", { name: "Live hand skeletons", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("skeleton-left").locator("circle"),
+    ).toHaveCount(21);
+    await expect(
+      page.getByTestId("skeleton-right").locator("circle"),
+    ).toHaveCount(21);
+    await expect(
+      page.getByTestId("hand-left").getByText("Open palm", { exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".pose-joint")).toHaveCount(0);
+    await page.getByRole("button", { name: "Both", exact: true }).click();
+    await expect(page.locator(".pose-joint, .pose-wrist")).toHaveCount(33);
+    await page.getByRole("button", { name: "Body", exact: true }).click();
+    await expect(page.locator(".hand-skeleton")).toHaveCount(0);
+    await page.getByRole("button", { name: "Hands", exact: true }).click();
+    previewPayload.hands = [signals.fist[0], signals.pinch[1]];
+    preview();
+    await expect(
+      page.getByTestId("hand-left").getByText("Closed fist", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("hand-right").getByText("Pinch", { exact: true }),
+    ).toBeVisible();
+    previewPayload.hands = [];
+    preview();
+    await expect(page.locator(".hand-skeleton")).toHaveCount(0);
+    await expect(
+      page.getByTestId("hand-left").getByText("Not visible", { exact: true }),
+    ).toBeVisible();
+    await expect(video).toBeVisible();
+    previewPayload.hands = signals.open;
+    preview();
     await page
       .getByRole("button", { name: "Calibrate position", exact: true })
       .click();
@@ -395,6 +449,8 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
     previewPayload = {
       landmarks: points,
       image,
+      hand_tracking: true,
+      hands: signals.open,
       trail: [
         [0.3, 0.3],
         [0.5, 0.7],
@@ -437,6 +493,9 @@ test("synthetic sensor coordinates drive calibration, capture feedback and track
     await expect(
       page.getByRole("button", { name: "Start camera", exact: true }),
     ).toBeEnabled();
+    await expect(
+      page.getByRole("img", { name: "Live camera video", exact: true }),
+    ).toBeHidden();
     await page.getByRole("button", { name: "Studio", exact: true }).click();
   } finally {
     clearInterval(previewTimer);

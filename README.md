@@ -25,6 +25,8 @@ Preferences includes **Manual profile preview** to inspect beginner, experienced
 
 ### Enable the real camera and Bluetooth workers
 
+The camera tracks both hands and all fingers using a separate Hand Landmarker: **21 points per hand**, left/right colors, open-palm/fist/pinch readouts and palm roll. Hands is the default overlay; select Body or Both for the required Pose skeleton. Hand signals appear without shoulder calibration. [Hand tracking and programmable signals](docs/hand-tracking.md). Recorded DollarPy wrist paths retain their separate calibration and command flow.
+
 ```powershell
 powershell -File tools/setup.ps1 -WithVision
 powershell -File tools/run.ps1

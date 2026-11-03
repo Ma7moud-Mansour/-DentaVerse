@@ -5,6 +5,7 @@ $runtime = Join-Path $projectRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $runtime)) { throw 'Run tools/setup.ps1 first.' }
 if (-not (Test-Path -LiteralPath (Join-Path $projectRoot 'frontend\dist\index.html'))) { throw 'Build the frontend first with tools/setup.ps1.' }
 if ($Vision -and -not (Test-Path -LiteralPath (Join-Path $projectRoot 'models\pose_landmarker_lite.task'))) { throw 'Run tools/setup.ps1 -WithVision first.' }
+if ($Vision -and -not (Test-Path -LiteralPath (Join-Path $projectRoot 'models\hand_landmarker.task'))) { throw 'Download the hand model with python tools/download_hand_model.py first.' }
 $children = @()
 $runLogDir = Join-Path $projectRoot '.review\runtime'
 New-Item -ItemType Directory -Force -Path $runLogDir | Out-Null

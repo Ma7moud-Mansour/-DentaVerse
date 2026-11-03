@@ -17,4 +17,5 @@ data/exports/
 data/recordings/
 data/templates/
 models/*.task
+models/*.download
 *.log

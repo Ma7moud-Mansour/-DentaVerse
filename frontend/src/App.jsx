@@ -1176,6 +1176,7 @@ function BluetoothPanel({ state, send }) {
   const service = state.services?.bluetooth ?? { status: "stopped" };
   const active =
     state.workers.bluetooth ||
+    service.managed ||
     ["starting", "running", "stopping"].includes(service.status);
   return (
     <section className="card bluetooth-panel">

@@ -38,4 +38,4 @@ Buttons have visible keyboard focus. Dialogs make the background inert and trap 
 
 ## Editable Figma work still required
 
-Create the frames, components, tokens, variants and flows in an editable Figma file. Include disconnected, paused, unavailable-camera, identity-switch and empty-journal states. Match the final implemented vocabulary rather than copying the presentation's earlier pinch vocabulary. Provide the actual share link and compare frames against the running UI. Screenshot imports alone do not establish editable component work.
+Create the frames, components, tokens, variants and flows in an editable Figma file. Include disconnected, paused, unavailable-camera, identity-switch and empty-journal states. Include Hands/Body/Both overlays and independent left/right 21-point hand readouts for open palm, fist, pinch, partial and lost tracking. Match the implemented command vocabulary and distinguish live hand signals from scene bindings. Provide the actual share link and compare frames against the running UI. Screenshot imports alone do not establish editable component work.

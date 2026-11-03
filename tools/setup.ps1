@@ -13,6 +13,8 @@ try {
     if ($WithVision) {
         & '.\.venv\Scripts\python.exe' tools/download_pose_model.py
         if ($LASTEXITCODE -ne 0) { throw 'Pose model download failed.' }
+        & '.\.venv\Scripts\python.exe' tools/download_hand_model.py
+        if ($LASTEXITCODE -ne 0) { throw 'Hand model download failed.' }
     }
     Push-Location -LiteralPath frontend
     try {

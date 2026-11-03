@@ -83,3 +83,18 @@ def test_stopping_vision_switches_to_manual_and_invalidates_readiness(engine):
     engine.worker_status("vision", False)
     with pytest.raises(ValueError, match="camera index"):
         send(engine, "vision_start", {"camera": "0; arbitrary"})
+
+
+def test_tcp_disconnect_during_owned_shutdown_cannot_enable_early_restart(engine):
+    prepare(engine)
+    engine.state["services"]["vision"]["managed"] = True
+    send(engine, "vision_stop")
+    engine.worker_status("vision", False)
+    assert engine.state["services"]["vision"]["status"] == "stopping"
+    with pytest.raises(ValueError, match="already starting"):
+        send(engine, "vision_start", {"camera": 0})
+    with pytest.raises(ValueError, match="already stopping"):
+        send(engine, "vision_stop")
+    engine.state["services"]["vision"].update(managed=False,status="stopped")
+    send(engine, "vision_start", {"camera": 0})
+    assert engine.state["services"]["vision"]["status"] == "starting"

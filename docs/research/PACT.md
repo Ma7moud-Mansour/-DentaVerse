@@ -15,7 +15,7 @@ These are design assumptions pending the survey and observed-use study. Do not d
 | Contexts | Hands may leave view | Cancel capture, pause, retain transforms, explicit resume | Interrupt tracking during manipulation |
 | Contexts | Several BLE peripherals may be near the workstation | Filter by service and require device selection | Multiple-device test |
 | Contexts | Network workers can disconnect | Worker status, stale-event rejection and reconnect snapshot | Disconnect worker and browser independently |
-| Technologies | Pose estimates body landmarks; fingers require a separate model | Required Pose path, optional hand model | Show skeleton overlay with usable wrist trail |
+| Technologies | Body and detailed finger tracking require separate models | Pose plus two-hand Hand Landmarker, required by the user's updated scope | Check both 21-point hands, finger states, loss and body overlay separately |
 | Technologies | DollarPy is a point-cloud template matcher | Different geometric shapes, calibration and held-out evaluation | Evaluate genuine templates versus new captures |
 | Technologies | TCP is a byte stream | Length-prefixed messages and bounded reads | Fragmentation/coalescing tests |
 | Technologies | BLE device identity is not a person's account identity | GATT application ID mapped to local registered profile | Unknown ID and identity switching tests |
