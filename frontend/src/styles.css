@@ -1059,6 +1059,47 @@ select {
   line-height: 1.7;
   margin: 18px 0;
 }
+.hand-controls {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.hand-controls-active {
+  border-color: #9aaa74;
+  background: #eaf0dd;
+}
+.hand-controls > strong {
+  font-size: 13px;
+}
+.hand-controls p {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.hand-controls ul {
+  margin: 0;
+  padding-left: 15px;
+  display: grid;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.hand-controls small {
+  font-size: 10px;
+  color: #65705d;
+  line-height: 1.6;
+}
+.inspector details {
+  margin: 12px 0;
+  font-size: 11px;
+}
+.inspector summary {
+  cursor: pointer;
+  margin-bottom: 10px;
+}
 .pose-overlay-controls ~ .capture-indicator {
   top: 58px;
 }

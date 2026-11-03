@@ -556,8 +556,17 @@ export default function Specimen({
         <>
           <span className="specimen-label">FDI 16 / UPPER RIGHT</span>
           <div className="viewer-instructions">
-            Drag tooth to rotate <span>·</span> Drag instrument to move{" "}
-            <span>·</span> Scroll to zoom
+            {session?.mode === "hand" ? (
+              <>
+                Open palm, then grip to rotate <span>·</span> Two pinches to
+                zoom
+              </>
+            ) : (
+              <>
+                Drag tooth to rotate <span>·</span> Drag instrument to move{" "}
+                <span>·</span> Scroll to zoom
+              </>
+            )}
           </div>
           <div className="model-credit">
             <a

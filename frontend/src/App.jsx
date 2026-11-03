@@ -27,6 +27,7 @@ import { useWorkbench } from "./useWorkbench";
 import Specimen from "./Specimen";
 import CameraSetup from "./CameraSetup";
 import PosePreview from "./PosePreview";
+import HandControls from "./HandControls";
 
 const TOOLS = [
   ["hand", "Hand control"],
@@ -78,6 +79,11 @@ export default function App() {
   useEffect(() => {
     setSavedNotice(Boolean(s?.saved));
   }, [s?.saved]);
+  useEffect(() => {
+    if (s?.mode === "hand" && s?.screen === "workbench") {
+      document.querySelector(".inspector")?.scrollTo({ top: 0 });
+    }
+  }, [s?.mode, s?.screen]);
   useEffect(() => {
     if (reset || state?.pending_identity || s?.paused) {
       const el = document.querySelector('[role="dialog"] button');
@@ -435,7 +441,7 @@ export default function App() {
                 </div>
                 <Specimen
                   session={s}
-                  disabled={sceneBlocked || !s.isolated}
+                  disabled={sceneBlocked || !s.isolated || s.mode === "hand"}
                   onAction={send}
                 />
                 <div className="stage-toolbar">
@@ -448,6 +454,24 @@ export default function App() {
                 </div>
               </section>
               <aside className="inspector">
+                {s.mode === "hand" && (
+                  <section
+                    className="live-hand-workbench"
+                    aria-label="Live hand workspace"
+                  >
+                    <HandControls
+                      state={state}
+                      send={send}
+                      blocked={sceneBlocked}
+                    />
+                    <PosePreview
+                      vision={state.vision}
+                      tracking={state.tracking}
+                      online={state.workers.vision}
+                      small
+                    />
+                  </section>
+                )}
                 <Eyebrow>Specimen</Eyebrow>
                 <div className="specimen-identity">
                   <span>16</span>
@@ -507,7 +531,7 @@ export default function App() {
                     max={180}
                     value={s.rotation.yaw}
                     unit="°"
-                    disabled={sceneBlocked || !s.isolated}
+                    disabled={sceneBlocked || !s.isolated || s.mode === "hand"}
                     onChange={(yaw) =>
                       send("rotate", { yaw, pitch: s.rotation.pitch })
                     }
@@ -518,7 +542,7 @@ export default function App() {
                     max={80}
                     value={s.rotation.pitch}
                     unit="°"
-                    disabled={sceneBlocked || !s.isolated}
+                    disabled={sceneBlocked || !s.isolated || s.mode === "hand"}
                     onChange={(pitch) =>
                       send("rotate", { yaw: s.rotation.yaw, pitch })
                     }
@@ -530,7 +554,7 @@ export default function App() {
                     step={0.1}
                     value={s.zoom}
                     unit="×"
-                    disabled={sceneBlocked || !s.isolated}
+                    disabled={sceneBlocked || !s.isolated || s.mode === "hand"}
                     onChange={(value) => send("zoom", { value })}
                   />
                 </div>
@@ -560,7 +584,7 @@ export default function App() {
                         max={1}
                         step={0.1}
                         value={s.tool_position.x}
-                        disabled={sceneBlocked}
+                        disabled={sceneBlocked || s.mode === "hand"}
                         onChange={(x) =>
                           send("move_tool", { x, y: s.tool_position.y })
                         }
@@ -571,7 +595,7 @@ export default function App() {
                         max={1}
                         step={0.1}
                         value={s.tool_position.y}
-                        disabled={sceneBlocked}
+                        disabled={sceneBlocked || s.mode === "hand"}
                         onChange={(y) =>
                           send("move_tool", { x: s.tool_position.x, y })
                         }
@@ -588,38 +612,50 @@ export default function App() {
                 </div>
                 <div className="inspector-section">
                   <Eyebrow>Gesture control</Eyebrow>
-                  {s.mode === "gesture" && (
-                    <PosePreview
-                      vision={state.vision}
-                      tracking={state.tracking}
-                      online={state.workers.vision}
-                      small
-                    />
+                  {s.mode !== "hand" && (
+                    <>
+                      <HandControls
+                        state={state}
+                        send={send}
+                        blocked={sceneBlocked}
+                      />
+                      {state.workers.vision && (
+                        <PosePreview
+                          vision={state.vision}
+                          tracking={state.tracking}
+                          online={state.workers.vision}
+                          small
+                        />
+                      )}
+                    </>
                   )}
                   <button className="text-button" onClick={() => go("setup")}>
                     Camera setup
                   </button>
-                  <div className="button-row">
-                    <Button
-                      secondary
-                      disabled={
-                        sceneBlocked ||
-                        s.mode !== "gesture" ||
-                        state.vision.capturing ||
-                        state.vision.pending_capture
-                      }
-                      onClick={() => send("capture_start")}
-                    >
-                      Record gesture
-                    </Button>
-                    <Button
-                      secondary
-                      disabled={!state.vision.capturing}
-                      onClick={() => send("capture_stop")}
-                    >
-                      Recognize
-                    </Button>
-                  </div>
+                  <details open={s.mode === "gesture"}>
+                    <summary>Recorded gesture paths</summary>
+                    <div className="button-row">
+                      <Button
+                        secondary
+                        disabled={
+                          sceneBlocked ||
+                          s.mode !== "gesture" ||
+                          state.vision.capturing ||
+                          state.vision.pending_capture
+                        }
+                        onClick={() => send("capture_start")}
+                      >
+                        Record gesture
+                      </Button>
+                      <Button
+                        secondary
+                        disabled={!state.vision.capturing}
+                        onClick={() => send("capture_stop")}
+                      >
+                        Recognize
+                      </Button>
+                    </div>
+                  </details>
                   {state.last_gesture && (
                     <p role="status">
                       {state.last_gesture.name}
@@ -843,6 +879,15 @@ export default function App() {
                     onChange={(e) => send("set_mode", { mode: e.target.value })}
                   >
                     <option value="manual">Mouse & keyboard</option>
+                    <option
+                      value="hand"
+                      disabled={
+                        !state.workers.vision ||
+                        !state.vision.pose?.hand_tracking
+                      }
+                    >
+                      Live hand controls
+                    </option>
                     <option value="gesture">Camera gestures</option>
                   </select>
                 </div>
@@ -946,13 +991,19 @@ export default function App() {
         <footer className="statusbar">
           <div>
             <span
-              className={`status-dot ${state.tracking === "ready" ? "" : "offline"}`}
+              className={`status-dot ${(s.mode === "hand" ? state.workers.vision && state.vision.pose?.hands?.length : state.tracking === "ready") ? "" : "offline"}`}
             />
-            {s.mode === "manual" ? "Manual input" : "Pose tracking"}
+            {s.mode === "manual"
+              ? "Manual input"
+              : s.mode === "hand"
+                ? "Hand controls"
+                : "Pose tracking"}
             <span className="status-divider" />
             {s.mode === "manual"
               ? "Mouse & keyboard"
-              : state.tracking.replace("_", " ")}
+              : s.mode === "hand"
+                ? (state.hand_control?.phase ?? "waiting")
+                : state.tracking.replace("_", " ")}
             <span className="status-divider" />
             <Bluetooth size={12} />
             {state.bluetooth.status}
@@ -1076,6 +1127,11 @@ export default function App() {
                     onClick={() => send("resume")}
                     disabled={
                       !connected ||
+                      (s.mode === "hand" &&
+                        (!state.workers.vision ||
+                          !state.vision.pose?.hand_tracking ||
+                          Date.now() / 1000 - state.vision.pose.timestamp >
+                            0.8)) ||
                       (s.mode === "gesture" && state.tracking !== "ready")
                     }
                   >

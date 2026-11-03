@@ -1,5 +1,6 @@
 """Local-only FastAPI coordinator, browser WebSocket and framed worker TCP."""
 import asyncio
+import copy
 import json
 import logging
 import os
@@ -100,9 +101,15 @@ class Hub:
         ack = self.engine.apply(message)
         if message.source == "vision" and message.type == "POSE_FRAME":
             async with self.broadcast_lock:
+                session = self.engine.state["session"]
+                if session["id"] != message.session_id:
+                    return ack
+                data = {"type": "pose", "session_id": session["id"], "pose": self.engine.state["vision"]["pose"], "hand_control": self.engine.state["hand_control"]}
+                if session["mode"] == "hand":
+                    data["session"] = copy.deepcopy(session)
                 for ws in list(self.browsers):
                     try:
-                        await asyncio.wait_for(ws.send_json({"type": "pose", "session_id": message.session_id, "pose": self.engine.state["vision"]["pose"]}), 2)
+                        await asyncio.wait_for(ws.send_json(data), 2)
                     except Exception:
                         self.browsers.discard(ws)
             return ack
@@ -122,6 +129,12 @@ class Hub:
                 ack["status"] = "dispatched"
         await self.broadcast()
         return ack
+
+    async def monitor_hand_control(self):
+        while not self.closing:
+            await asyncio.sleep(0.2)
+            if self.engine.expire_hand_tracking():
+                await self.broadcast()
 
     async def handle_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         source = None
@@ -181,6 +194,9 @@ def create_app(db_path: str | Path | None = None, tcp_port: int | None = None) -
         server = await asyncio.start_server(app.state.hub.handle_worker, "127.0.0.1", tcp_port if tcp_port is not None else int(os.environ.get("DENTAVERSE_TCP_PORT", "8766")))
         app.state.tcp_port = server.sockets[0].getsockname()[1]
         app.state.hub.supervisor.port = app.state.tcp_port
+        monitor = asyncio.create_task(app.state.hub.monitor_hand_control())
+        app.state.hub.jobs.add(monitor)
+        monitor.add_done_callback(app.state.hub.jobs.discard)
         try:
             yield
         finally:

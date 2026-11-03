@@ -1,5 +1,6 @@
 import copy
 import math
+import time
 from collections import deque
 from uuid import UUID, uuid4
 
@@ -7,6 +8,7 @@ from backend.context import LAYERS, content_for
 from backend.protocol import Message, check_fresh
 from backend.preview import validate_camera_image
 from backend.hands import validate_hands
+from backend.hand_control import HandControl
 from backend.storage import PROFILES, Store
 
 
@@ -33,12 +35,19 @@ class Engine:
                 "calibration_progress": 0.0, "calibration_status": "idle", "capture_name": None, "pending_capture": False, "pose": None},
             "services": {name: {"status": "stopped", "managed": False, "error": None} for name in ("vision", "bluetooth")},
             "last_gesture": None, "events": []}
+        self.hand_controller = HandControl()
+        self.state["hand_control"] = HandControl.feedback("off", "Enable hand controls to move the specimen")
+        self._hand_dirty = False
+        self._last_hand_checkpoint = time.monotonic()
+        self._last_pose_event = None
         self.seen: set[str] = set()
         self.order: deque[str] = deque()
         self._restore_workspace()
 
     def checkpoint(self):
         self.store.save_workspace(self.state["profile"]["id"], self.state["session"], self.state["vision"]["dominant_hand"])
+        self._hand_dirty = False
+        self._last_hand_checkpoint = time.monotonic()
 
     def _restore_workspace(self):
         record = self.store.load_workspace()
@@ -65,7 +74,7 @@ class Engine:
             s["rotation"] = {"yaw": number(s["rotation"]["yaw"], -180, 180), "pitch": number(s["rotation"]["pitch"], -80, 80)}
             s["zoom"] = number(s["zoom"], 0.6, 1.8)
             s["tool_position"] = {"x": number(s["tool_position"]["x"], -1, 1), "y": number(s["tool_position"]["y"], -1, 1)}
-            if s["layer"] not in LAYERS or s["tool"] not in {"hand", "mirror", "explorer"} or s["mode"] not in {"manual", "gesture"}:
+            if s["layer"] not in LAYERS or s["tool"] not in {"hand", "mirror", "explorer"} or s["mode"] not in {"manual", "gesture", "hand"}:
                 raise ValueError("Invalid saved controls")
             if not isinstance(s["checkpoints"], list) or len(s["checkpoints"]) > 3 or any(p not in {"located", "inspected", "mirror_placed"} for p in s["checkpoints"]):
                 raise ValueError("Invalid saved checkpoints")
@@ -80,7 +89,7 @@ class Engine:
             self.state["identity_source"] = "restored_session"
             self.state["session"] = s
             self.state["vision"]["dominant_hand"] = hand
-            if s["mode"] == "gesture":
+            if s["mode"] in {"gesture", "hand"}:
                 self._pause("tracking")
         except (KeyError, ValueError, TypeError, AttributeError):
             # A malformed checkpoint must not prevent opening the journal.
@@ -102,8 +111,10 @@ class Engine:
             self.state["vision"]["calibration_status"] = "idle"
             self.state["vision"]["calibration_progress"] = 0.0
             self.state["vision"]["pose"] = None
-            if self.state["session"]["mode"] == "gesture":
+            if self.state["session"]["mode"] in {"gesture", "hand"}:
                 self._pause("tracking")
+                if self._hand_dirty:
+                    self.checkpoint()
         elif source == "bluetooth":
             self.state["bluetooth"]["status"] = "idle" if connected else "offline"
 
@@ -114,6 +125,52 @@ class Engine:
         self.state["session"]["gesture_epoch"] += 1
         self.state["vision"]["capturing"] = False
         self.state["vision"]["pending_capture"] = False
+        self._reset_hand_control("paused", "Scene paused · resume, then open your hand")
+
+    def _reset_hand_control(self, phase="waiting", message="Open your hand to take control"):
+        self.hand_controller.reset()
+        self.state["hand_control"] = HandControl.feedback(phase, message)
+
+    def _hand_camera_ready(self):
+        pose = self.state["vision"]["pose"]
+        return self.state["workers"]["vision"] and pose and pose["hand_tracking"] and pose["control_epoch"] is not None and 0 <= time.time() - pose["timestamp"] <= 0.8
+
+    def expire_hand_tracking(self):
+        s = self.state["session"]
+        if s["mode"] == "hand" and not s["paused"] and not self._hand_camera_ready():
+            self._pause("tracking")
+            self.checkpoint()
+            return True
+        return False
+
+    def _apply_hand_frame(self, message):
+        s, pose = self.state["session"], self.state["vision"]["pose"]
+        previous_phase = self.state["hand_control"]["phase"]
+        if s["mode"] != "hand":
+            self._reset_hand_control("off", "Enable hand controls to move the specimen")
+        elif s["paused"]:
+            self._reset_hand_control("paused", "Scene paused · resume, then open your hand")
+        elif s["screen"] != "workbench" or not s["isolated"]:
+            self._reset_hand_control("waiting", "Open a specimen to use hand controls")
+        elif self.state["vision"]["capturing"] or self.state["vision"]["pending_capture"]:
+            self._reset_hand_control("waiting", "Finish the gesture recording before controlling the scene")
+        elif not self._hand_camera_ready() or pose["control_epoch"] != s["gesture_epoch"]:
+            self._reset_hand_control("waiting", "Waiting for fresh hand tracking · open your hand")
+        else:
+            image = pose.get("image")
+            aspect = image["width"] / image["height"] if image else 4/3
+            action, feedback = self.hand_controller.step(s, pose["hands"], self.state["vision"]["dominant_hand"], (s["id"], s["gesture_epoch"], s["tool"]), aspect)
+            self.state["hand_control"] = feedback
+            if action:
+                kind, payload = action
+                key = {"rotate":"rotation", "zoom":"zoom", "move_tool":"tool_position"}[kind]
+                target = payload["value"] if kind == "zoom" else payload
+                if s[key] != target:
+                    self._action(kind, payload)
+                    self._hand_dirty = True
+        active = {"rotating", "moving_tool", "zooming"}
+        if self._hand_dirty and (time.monotonic() - self._last_hand_checkpoint >= 0.5 or previous_phase in active and self.state["hand_control"]["phase"] not in active):
+            self.checkpoint()
 
     def _checkpoint(self, name: str):
         points = self.state["session"]["checkpoints"]
@@ -145,7 +202,12 @@ class Engine:
         if message.source == "vision" and message.type == "POSE_FRAME":
             if message.session_id != self.state["session"]["id"]:
                 raise ValueError("Pose frame belongs to another session")
+            previous_pose = self.state["vision"]["pose"]
+            if previous_pose and (message.timestamp < previous_pose["timestamp"] or message.event_id == self._last_pose_event):
+                return {"type": "ack", "event_id": message.event_id, "status": "preview_stale"}
             self.state["vision"]["pose"] = self._pose(message)
+            self._last_pose_event = message.event_id
+            self._apply_hand_frame(message)
             return {"type": "ack", "event_id": message.event_id, "status": "preview"}
         if message.event_id in self.seen:
             return {"type": "ack", "event_id": message.event_id, "status": "duplicate"}
@@ -176,6 +238,12 @@ class Engine:
             self.seen.remove(self.order.popleft())
         self.state["events"] = ([{"id": message.event_id, "source": message.source, "type": message.type, "timestamp": message.timestamp}] + self.state["events"])[:20]
         if message.source == "ui" or message.type in {"USER_IDENTIFIED", "GESTURE_RECOGNIZED"}:
+            interrupts = {"navigate", "select_tooth", "isolate", "rotate", "zoom", "layer", "tool", "move_tool", "place_tool", "reset", "set_mode", "pause", "resume", "vision_hand", "vision_calibrate", "vision_start", "vision_stop", "capture_start", "capture_stop", "capture_cancel", "template_record", "new_session", "preview_profile", "confirm_identity"}
+            if message.source == "ui" and message.type in interrupts and (self.state["session"]["mode"] == "hand" or previous["session"]["mode"] == "hand"):
+                if self.state["session"]["gesture_epoch"] == previous["session"]["gesture_epoch"]:
+                    self.state["session"]["gesture_epoch"] += 1
+                phase = "paused" if self.state["session"]["paused"] else "waiting" if self.state["session"]["mode"] == "hand" else "off"
+                self._reset_hand_control(phase, "Scene paused · resume, then open your hand" if phase == "paused" else "Open your hand to take control")
             self.checkpoint()
         return {"type": "ack", "event_id": message.event_id, "status": "applied"}
 
@@ -231,14 +299,18 @@ class Engine:
         elif action == "pause":
             self._pause("manual")
         elif action == "resume":
+            if s["mode"] == "hand" and not self._hand_camera_ready():
+                raise ValueError("Restore live hand tracking before resuming, or use manual controls")
             if s["mode"] == "gesture" and (self.state["tracking"] != "ready" or not self.state["vision"]["calibrated"] or not self.state["workers"]["vision"]):
                 raise ValueError("Restore calibrated tracking before resuming, or choose manual mode")
             s.update(paused=False, pause_reason=None)
             s["gesture_epoch"] += 1
         elif action == "set_mode":
             mode = payload.get("mode")
-            if mode not in {"manual", "gesture"}:
+            if mode not in {"manual", "gesture", "hand"}:
                 raise ValueError("Unknown input mode")
+            if mode == "hand" and not self._hand_camera_ready():
+                raise ValueError("Start the camera and wait for live hand tracking first")
             if mode == "gesture" and (self.state["tracking"] != "ready" or not self.state["vision"]["calibrated"] or not self.state["workers"]["vision"]):
                 raise ValueError("Connect the camera worker and complete calibration first")
             s["mode"] = mode
@@ -283,7 +355,7 @@ class Engine:
                 if source == "vision":
                     self.state["vision"].update(calibrated=False, capturing=False, pending_capture=False, pose=None, calibration_status="idle", calibration_progress=0.0)
                     s["gesture_epoch"] += 1
-                    if s["mode"] == "gesture":
+                    if s["mode"] in {"gesture", "hand"}:
                         s["mode"] = "manual"
         elif action == "vision_hand":
             if payload.get("hand") not in {"left", "right"}:
@@ -392,10 +464,13 @@ class Engine:
         count = p.get("capture_points", 0)
         if type(count) is not int or not 0 <= count <= 1000:
             raise ValueError("Invalid capture sample count")
+        epoch = p.get("control_epoch")
+        if epoch is not None and (type(epoch) is not int or epoch < 0):
+            raise ValueError("Invalid hand control epoch")
         return {"landmarks": landmarks, "trail": path, "capture_points": count,
             "capture_elapsed": number(p.get("capture_elapsed", 0), 0, 9), "timestamp": message.timestamp,
             "image": validate_camera_image(p.get("image")), "hands": validate_hands(p.get("hands", [])),
-            "hand_tracking": p.get("hand_tracking") is True}
+            "hand_tracking": p.get("hand_tracking") is True, "control_epoch": epoch}
 
     def _bluetooth(self, kind: str, p: dict):
         if kind == "BLE_STATUS":

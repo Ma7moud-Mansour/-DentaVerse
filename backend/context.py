@@ -31,13 +31,18 @@ def content_for(state: dict) -> dict:
     recovery = None
     if session["paused"]:
         recovery = "Tracking is interrupted. Return your shoulder and wrist to view, then explicitly resume." if session["pause_reason"] == "tracking" else "Your scene is retained. Resume when you are ready."
+        if session["mode"] == "hand" and session["pause_reason"] == "tracking":
+            recovery = "Restore the camera, resume explicitly, then show an open hand before grabbing the specimen."
     tool = session["tool"]
+    tool_help = "Rotate the specimen using the view controls." if tool == "hand" else f"Position the virtual {tool}, then confirm placement. This is an interaction exercise."
+    if session["mode"] == "hand":
+        tool_help = "Show an open palm, then grip or pinch to rotate the specimen. Two pinches control zoom." if tool == "hand" else f"Pinch and move to position the virtual {tool}; open your hand to release. A fist rotates the specimen."
     return {
         **base,
         "layer_title": layer_title,
         "layer_text": layer_text,
         "task": "Choose tooth 16 from the map." if session["selected_tooth"] is None else "Isolate the selected tooth." if not session["isolated"] else "Inspect the specimen, explore its layers, then position the mirror.",
-        "tool_help": "Rotate the specimen using the view controls." if tool == "hand" else f"Position the virtual {tool}, then confirm placement. This is an interaction exercise.",
+        "tool_help": tool_help,
         "recovery": recovery,
         "rule": f"profile:{state['profile']['level']};layer:{session['layer']};tool:{tool};paused:{session['paused']}",
     }

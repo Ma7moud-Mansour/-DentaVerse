@@ -160,6 +160,24 @@ export default function CameraSetup({ state, send, onContinue }) {
           <ArrowRight size={16} />
         </button>
         <button
+          className="button"
+          disabled={
+            !state.hand_control ||
+            !state.workers.vision ||
+            !vision.pose?.hand_tracking ||
+            collecting
+          }
+          onClick={() => {
+            send("set_mode", { mode: "hand" });
+            send("navigate", {
+              screen: state.session.isolated ? "workbench" : "atlas",
+            });
+          }}
+        >
+          Continue with hand controls
+          <ArrowRight size={16} />
+        </button>
+        <button
           className="text-button"
           onClick={() => {
             send("set_mode", { mode: "manual" });

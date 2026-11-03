@@ -28,6 +28,8 @@ export function useWorkbench() {
                 return previous;
               return {
                 ...previous,
+                session: message.session ?? previous.session,
+                hand_control: message.hand_control ?? previous.hand_control,
                 vision: { ...previous.vision, pose: message.pose },
               };
             });

@@ -36,6 +36,8 @@ Worker controls are validated then forwarded as a `command` frame. Their ACK say
 
 ## Coordinator messages
 
+For scene bindings the worker echoes `control_epoch` in POSE_FRAME. The coordinator accepts hand movement only in hand mode with current session/epoch and a fresh preview. Hand-mode browser preview packets also contain the authoritative `session` transform/checkpoint fields and `hand_control: {phase, message, hands}` feedback. These messages update the 3D scene directly without a second UI action or browser-side gesture inference. Missing/old epochs remain preview-only. A stalled stream pauses hand mode and requires explicit recovery. See [binding rules](hand-controls.md).
+
 The preview now carries `hand_tracking: true` and `hands: [...]`. It permits at most two distinct left/right IDs, exactly 21 finite x/y/z landmarks per hand, and bounded finger/pose/motion features. Each hand includes a debounced gesture state, five finger booleans, extended-finger count, normalized pinch ratio, palm center, roll and per-frame motion deltas. `score` is the handedness probability for the emitted side, not a positional-accuracy score. Missing hands must be an empty array; no prior hand pose is replayed. Body points remain in the same packet, separately selectable in the UI. See [hand signals](hand-tracking.md).
 
 - Browser: `{"type":"state","state":{...}}` full state, including active profile, session, context, worker status and this user's journal.

@@ -188,6 +188,7 @@ async def run(args):
                     preview = tracker.preview(capture.points, now - capture.started if capture.active else 0)
                     preview["hands"] = hands
                     preview["hand_tracking"] = True
+                    preview["control_epoch"] = transport.epoch
                     preview["image"] = encode_camera_image(frame, cv2)
                     await transport.emit("POSE_FRAME", preview)
                     last_preview = now
