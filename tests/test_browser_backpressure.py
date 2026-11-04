@@ -79,3 +79,15 @@ async def test_queued_pose_from_previous_control_epoch_is_discarded(hub):
     await hub.pose_task
     assert delivered == []
     assert hub.pending_pose is None
+
+
+def test_hand_clock_precision_tolerance_does_not_extend_stale_deadline(hub, monkeypatch):
+    now = time.time()
+    monkeypatch.setattr("backend.engine.time.time", lambda: now)
+    engine = hub.engine
+    engine.state["vision"]["pose"] = {"hand_tracking": True, "control_epoch": 0, "timestamp": now + .02}
+    assert engine._hand_camera_ready()
+    engine.state["vision"]["pose"]["timestamp"] = now + .1
+    assert not engine._hand_camera_ready()
+    engine.state["vision"]["pose"]["timestamp"] = now - .81
+    assert not engine._hand_camera_ready()

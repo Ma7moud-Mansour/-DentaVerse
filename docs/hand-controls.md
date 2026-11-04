@@ -34,6 +34,8 @@ Validated vision POSE_FRAME messages carry `control_epoch`, echoed from coordina
 
 Losing a controlling hand releases its grab independently and clears its arming. The other instrument-mode hand can continue. A closed hand reappearing in view must open before acquiring a new grab. Worker loss or a frame stream older than 0.8 seconds pauses hand mode; a 0.2-second coordinator monitor also catches silent camera stalls. Recovery requires fresh frames, explicit Resume, and an open hand. Timing/dead-zone values are initial engineering settings, not measured usability results.
 
+Camera readiness permits at most 50 ms of forward timestamp skew between local runtimes; larger future timestamps remain invalid. This does not extend the 0.8-second stale-frame deadline. Browser preview delivery keeps only the latest pending frame and runs separately from camera ingestion, so a slow display cannot queue camera data behind its WebSocket writes. Queued previews from an earlier control epoch are discarded.
+
 The coordinator updates the same rotate/zoom/move_tool actions used by manual controls. Hand previews deliver authoritative session transforms and hand_control feedback to the browser over WebSocket. Motion checkpoints are saved at most twice per second and on release/loss; the journal still requires an explicit save. Camera images, hand coordinates and grab anchors are not persisted. Restored hand-mode workspaces start paused with empty sensor state.
 
 ## Smoothing and depth

@@ -4,6 +4,7 @@ import copy
 import json
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -154,6 +155,8 @@ class Hub:
         while not self.closing:
             await asyncio.sleep(0.2)
             if self.engine.expire_hand_tracking():
+                pose = self.engine.state["vision"]["pose"]
+                log.warning("Hand stream expired: age=%s, connected=%s", round(time.time()-pose["timestamp"], 4) if pose else None, self.engine.state["workers"]["vision"])
                 await self.broadcast()
 
     async def handle_worker(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):

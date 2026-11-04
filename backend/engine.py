@@ -136,7 +136,10 @@ class Engine:
 
     def _hand_camera_ready(self):
         pose = self.state["vision"]["pose"]
-        return self.state["workers"]["vision"] and pose and pose["hand_tracking"] and pose["control_epoch"] is not None and 0 <= time.time() - pose["timestamp"] <= 0.8
+        # Local runtimes can sample the Windows wall clock at different precision.
+        # A few milliseconds ahead is not a camera outage; larger clock errors
+        # remain invalid, and the stale-frame deadline stays at 0.8 seconds.
+        return self.state["workers"]["vision"] and pose and pose["hand_tracking"] and pose["control_epoch"] is not None and -0.05 <= time.time() - pose["timestamp"] <= 0.8
 
     def expire_hand_tracking(self):
         s = self.state["session"]

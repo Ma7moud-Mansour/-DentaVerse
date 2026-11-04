@@ -1,5 +1,4 @@
 // Explicit synthetic protocol source; no workstation camera is accessed.
-import { parentPort } from "node:worker_threads";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -38,13 +37,23 @@ const image = {
   width: 320,
   height: 180,
 };
+const sent = new Map();
 const write = (data) => {
+  if (data.type === "POSE_FRAME") {
+    sent.set(data.event_id, Date.now());
+    if (sent.size > 128) sent.delete(sent.keys().next().value);
+  }
   const body = Buffer.from(JSON.stringify(data)),
     header = Buffer.alloc(4);
   header.writeUInt32BE(body.length);
   socket.write(Buffer.concat([header, body]));
 };
+let lastTick = Date.now();
 const tick = () => {
+  const now = Date.now();
+  if (now - lastTick > 650)
+    process.stderr.write(`Synthetic source gap: ${now - lastTick}ms\n`);
+  lastTick = now;
   if (session && !socket.destroyed)
     write({
       version: 1,
@@ -64,6 +73,7 @@ const tick = () => {
 };
 const start = () => {
   clearInterval(timer);
+  lastTick = Date.now();
   tick();
   timer = setInterval(tick, 100);
 };
@@ -73,9 +83,15 @@ socket.on("data", (data) => {
     const length = buffer.readUInt32BE(0),
       packet = JSON.parse(buffer.subarray(4, length + 4).toString());
     buffer = buffer.subarray(length + 4);
+    if (sent.has(packet.event_id)) {
+      const lag = Date.now() - sent.get(packet.event_id);
+      sent.delete(packet.event_id);
+      if (lag > 650)
+        process.stderr.write(`Synthetic source ACK lag: ${lag}ms\n`);
+    }
     if (packet.type === "welcome") {
       session = packet.session_id;
-      parentPort.postMessage({ session });
+      process.send({ session });
       start();
     }
     if (packet.type === "context") {
@@ -90,12 +106,16 @@ socket.on("data", (data) => {
 });
 write({ type: "hello", version: 1, source: "vision" });
 
-parentPort.on("message", ({ command, value }) => {
+process.on("message", ({ command, value }) => {
   if (command === "set") {
     hands = value;
+    if (!timer) lastTick = Date.now();
     tick();
   }
-  if (command === "pause") clearInterval(timer);
+  if (command === "pause") {
+    clearInterval(timer);
+    timer = null;
+  }
   if (command === "start") start();
   if (command === "match")
     write({

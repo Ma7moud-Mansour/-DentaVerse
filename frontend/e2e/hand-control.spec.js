@@ -1,5 +1,6 @@
 import { test, expect } from "./fixtures.js";
-import { Worker } from "node:worker_threads";
+import { fork } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -27,15 +28,30 @@ function hand(side = "right", pose = "open", x = 0.7, y = 0.5, roll = 0) {
 }
 
 function syntheticVision() {
-  const worker = new Worker(new URL("./synthetic-vision.js", import.meta.url));
+  const worker = fork(
+    fileURLToPath(new URL("./synthetic-vision.js", import.meta.url)),
+    [],
+    {
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
+      windowsHide: true,
+      execArgv: [],
+    },
+  );
   let session;
+  let diagnostics = "";
+  worker.stderr.on("data", (chunk) => {
+    diagnostics = (diagnostics + chunk).slice(-8000);
+  });
   worker.on("message", (value) => {
     session = value.session;
   });
-  const send = (command, value) => worker.postMessage({ command, value });
+  const send = (command, value) => worker.send({ command, value });
   return {
     get session() {
       return session;
+    },
+    get diagnostics() {
+      return diagnostics;
     },
     set(value) {
       send("set", value);
@@ -50,7 +66,11 @@ function syntheticVision() {
       send("match", value);
     },
     close() {
-      return worker.terminate();
+      if (worker.exitCode !== null || worker.signalCode !== null) return;
+      return new Promise((resolve) => {
+        worker.once("exit", resolve);
+        worker.kill();
+      });
     },
   };
 }
@@ -265,6 +285,11 @@ for i,x in enumerate([.5,.4,.3,.4,.5,.6,.7,.6,.5,.4,.3,.4,.5]):
     });
     await page.getByRole("button", { name: "Studio", exact: true }).click();
   } finally {
+    if (sensor.diagnostics)
+      await test.info().attach("synthetic-source-timing", {
+        body: sensor.diagnostics,
+        contentType: "text/plain",
+      });
     try {
       if (
         await page
