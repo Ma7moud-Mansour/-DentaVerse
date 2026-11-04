@@ -33,6 +33,8 @@ class Hub:
         self.closing = False
         self.jobs = set()
         self.worker_tasks = set()
+        self.pending_pose = None
+        self.pose_task = None
         self.service_locks = {source: asyncio.Lock() for source in ("vision", "bluetooth")}
         self.supervisor = WorkerSupervisor(ROOT, 8766, self.service_exit)
 
@@ -100,18 +102,19 @@ class Hub:
     async def dispatch(self, message: Message) -> dict:
         ack = self.engine.apply(message)
         if message.source == "vision" and message.type == "POSE_FRAME":
-            async with self.broadcast_lock:
-                session = self.engine.state["session"]
-                if session["id"] != message.session_id:
-                    return ack
-                data = {"type": "pose", "session_id": session["id"], "pose": self.engine.state["vision"]["pose"], "hand_control": self.engine.state["hand_control"]}
-                if session["mode"] == "hand":
-                    data["session"] = copy.deepcopy(session)
-                for ws in list(self.browsers):
-                    try:
-                        await asyncio.wait_for(ws.send_json(data), 2)
-                    except Exception:
-                        self.browsers.discard(ws)
+            session = self.engine.state["session"]
+            if session["id"] != message.session_id or self.closing:
+                return ack
+            data = {"type": "pose", "session_id": session["id"], "pose": self.engine.state["vision"]["pose"], "hand_control": self.engine.state["hand_control"]}
+            if session["mode"] == "hand":
+                data["session"] = copy.deepcopy(session)
+            # Camera ingestion/ACK must never wait for a slow browser. Keep one
+            # latest preview, not a queue of stale RGB frames and transformations.
+            self.pending_pose = (session["gesture_epoch"], data)
+            if self.pose_task is None or self.pose_task.done():
+                self.pose_task = asyncio.create_task(self.flush_poses())
+                self.jobs.add(self.pose_task)
+                self.pose_task.add_done_callback(self.jobs.discard)
             return ack
         if message.type in SERVICE_ACTIONS and ack["status"] == "applied":
             source, start = SERVICE_ACTIONS[message.type]
@@ -129,6 +132,23 @@ class Hub:
                 ack["status"] = "dispatched"
         await self.broadcast()
         return ack
+
+    async def flush_poses(self):
+        try:
+            while self.pending_pose is not None and not self.closing:
+                async with self.broadcast_lock:
+                    epoch, data = self.pending_pose
+                    self.pending_pose = None
+                    session = self.engine.state["session"]
+                    if data["session_id"] != session["id"] or epoch != session["gesture_epoch"]:
+                        continue
+                    for ws in list(self.browsers):
+                        try:
+                            await asyncio.wait_for(ws.send_json(data), 2)
+                        except Exception:
+                            self.browsers.discard(ws)
+        finally:
+            self.pending_pose = None
 
     async def monitor_hand_control(self):
         while not self.closing:
