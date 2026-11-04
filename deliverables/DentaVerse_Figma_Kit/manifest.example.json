@@ -1,0 +1,15 @@
+{
+  "name": "DentaVerse Phase II",
+  "id": "COPY_YOUR_FIGMA_GENERATED_PLUGIN_ID",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": [
+    "figma"
+  ],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  }
+}

@@ -39,3 +39,14 @@ Buttons have visible keyboard focus. Dialogs make the background inert and trap 
 ## Editable Figma work still required
 
 Create the frames, components, tokens, variants and flows in an editable Figma file. Include disconnected, paused, unavailable-camera, identity-switch and empty-journal states. Include Hands/Body/Both overlays and independent left/right 21-point hand readouts for open palm, fist, pinch, partial and lost tracking. Match the implemented command vocabulary and distinguish live hand signals from scene bindings. Provide the actual share link and compare frames against the running UI. Screenshot imports alone do not establish editable component work.
+
+
+## Generated import package
+
+[Download DentaVerse_Figma_Kit.zip](../deliverables/DentaVerse_Figma_Kit.zip), or open the [SVG board](../deliverables/DentaVerse_Figma_Kit/DentaVerse-Editable-Screens.svg) and [local preview](../deliverables/DentaVerse_Figma_Kit/preview.html). [Arabic import instructions](../deliverables/DentaVerse_Figma_Kit/README_AR.md) explain creating a user-owned development plugin, replacing its code.js, and saving/sharing the resulting Design file.
+
+The source contains 17 desktop screens, three component families with nine variants, paint/text styles, and 124 navigation targets. The bundled importer creates native frames, text nodes, instances and prototype reactions using the Plugin API. The model reference is a newly rendered, attributed still from the licensed GLB; there are no camera frames or participant records. Mirror artwork is an editable vector illustration.
+
+The package passed JavaScript syntax, local object-graph contract checks and SVG browser rendering, including a Studio-to-Atlas click. These are **not execution inside Figma**. The current session exposes the Figma skills but no whoami/create_new_file/use_figma tools, so it has not created a native .fig or cloud share link. S4-02 and S4-07 remain open until the importer is run, the resulting file is reviewed in the editor, and its real link is recorded. SVG/screenshot imports alone do not verify native component work.
+
+Rebuild with `node tools/export_figma_model.mjs` (only when the licensed preview asset changes), then `.venv/Scripts/python.exe tools/build_figma_kit.py`. Check the local importer contract with `node tools/check_figma_kit.mjs`; render the local SVG preview with `node tools/preview_figma_kit.mjs`.
