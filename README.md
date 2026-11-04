@@ -25,7 +25,7 @@ Preferences includes **Manual profile preview** to inspect beginner, experienced
 
 ### Enable the real camera and Bluetooth workers
 
-To control the tooth directly, open a specimen and select **Enable hand controls**. Show an open palm, then grip/pinch and move to rotate. Select Mirror/Explorer and pinch to move the instrument. Pinch with both hands and change their separation to zoom. Open your hand to release. The camera and feedback appear beside the tooth; mouse transforms are disabled until **Use mouse & keyboard** is selected. [Control guide and verification](docs/hand-controls.md).
+To control the tooth directly, open a specimen and select **Enable hand controls**. Show an open palm, then grip/pinch and move to rotate. With Mirror/Explorer selected, the left hand rotates/rolls the tooth and uses depth to zoom; the right hand moves the instrument in XYZ and tilts it. Both grips can work simultaneously. With Hand selected, pinch with both hands and change their separation to zoom. The mirror renders an actual scene reflection; Explorer highlights mesh contact and allows temporary surface marks. Open your hand to release. The camera and feedback appear beside the tooth; mouse transforms are disabled until **Use mouse & keyboard** is selected. [Control guide and verification](docs/hand-controls.md).
 
 The camera tracks both hands and all fingers using a separate Hand Landmarker: **21 points per hand**, left/right colors, open-palm/fist/pinch readouts and palm roll. Hands is the default overlay; select Body or Both for the required Pose skeleton. Hand signals appear without shoulder calibration. [Hand tracking and programmable signals](docs/hand-tracking.md). Recorded DollarPy wrist paths retain their separate calibration and command flow.
 

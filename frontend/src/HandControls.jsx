@@ -41,25 +41,39 @@ export default function HandControls({ state, send, blocked }) {
           ? state.hand_control?.message
           : "Enable, then show an open palm to take control."}
       </p>
+      {active && state.session.tool !== "hand" && (
+        <div className="hand-roles">
+          <span>
+            <b>Left · tooth</b>
+            {state.hand_control?.roles?.left || "Open palm to rearm"}
+          </span>
+          <span>
+            <b>Right · instrument</b>
+            {state.hand_control?.roles?.right || "Open palm to rearm"}
+          </span>
+        </div>
+      )}
       <details open={!active}>
         <summary>Hand gestures</summary>
         <ul>
           <li>
-            <b>Rotate:</b> close your hand and move or turn it. With Hand
-            selected, a pinch also grabs the tooth.
+            <b>With an instrument:</b> your left hand rotates the tooth; move it
+            closer to the camera to zoom in. Your right hand moves the
+            instrument. Both hands work together, each with its own grip or
+            pinch.
           </li>
           <li>
-            <b>Move an instrument:</b> select Mirror or Explorer, then pinch and
-            move.
+            <b>Instrument XYZ:</b> move right/left, up/down, or toward/away from
+            the camera. Turn your right palm to tilt the mirror or explorer.
           </li>
           <li>
-            <b>Zoom:</b> pinch with both hands and spread them apart or bring
-            them together.
+            <b>Hand tool:</b> either hand can grip to rotate. Two pinches and
+            spreading your hands control zoom in this mode only.
           </li>
         </ul>
         <small>
-          Open your hand to release. After zooming or tracking loss, open your
-          hands before grabbing again.
+          Open your hand to release. After tracking loss, open that hand before
+          grabbing again. Camera depth is relative, not a physical measurement.
         </small>
       </details>
     </section>

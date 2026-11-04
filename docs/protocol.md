@@ -50,3 +50,9 @@ POSE_FRAME may now include `image: {data: "base64 JPEG bytes", width: 640, heigh
 Personal participant details do not belong in protocol payloads. The latest 20 applied event labels are included for debugging. They are not research results or a durable clinical audit log.
 
 Service controls launch only fixed Python modules, without a shell, and use the coordinator's actual TCP port. Service status is starting/running/stopping/stopped/error; managed indicates a process owned by this coordinator. Stop sends `shutdown` and waits for exit. A stuck owned process is terminated with a bounded fallback; external workers must honor shutdown or be closed by their operator. Logs are local under ignored `.review/runtime`.
+
+## Three-axis instrument control
+
+Session `rotation` now has bounded yaw [-180,180], pitch [-80,80] and roll [-180,180]. `tool_position` has X/Y/Z, each [-1,1]; separate `tool_rotation` has yaw/pitch/roll [-180,180]. `rotate` accepts optional roll, preserving it for older yaw/pitch clients. `move_tool` accepts any subset of XYZ and orientation and preserves omitted components. All supplied components are validated before mutation. Reset restores zero roll/depth/angles. Legacy workspace checkpoints acquire zero missing components without losing IDs, drafts or previous transforms.
+
+Hand frames optionally include finite `palm_span` [0,5], a smoothed apparent palm size for relative depth. Old frames derive size from palm landmarks. It is not metric distance. Instrument-mode `hand_control` may report phase `bimanual` and `roles: {left,right}` messages. Both hands produce validated actions in a single frame; the frame broadcast contains their combined authoritative result.

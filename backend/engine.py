@@ -14,8 +14,8 @@ from backend.storage import PROFILES, Store
 
 def new_session() -> dict:
     return {"id": str(uuid4()), "screen": "studio", "selected_tooth": None, "isolated": False,
-        "rotation": {"yaw": 0.0, "pitch": 0.0}, "zoom": 1.0, "layer": "surface", "tool": "hand",
-        "tool_position": {"x": 0.7, "y": 0.0}, "checkpoints": [], "paused": False,
+        "rotation": {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}, "zoom": 1.0, "layer": "surface", "tool": "hand",
+        "tool_position": {"x": 0.7, "y": 0.0, "z": 0.0}, "tool_rotation": {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}, "checkpoints": [], "paused": False,
         "pause_reason": None, "mode": "manual", "gesture_epoch": 0, "note": "", "saved": False}
 
 
@@ -71,9 +71,10 @@ class Engine:
                 raise ValueError("Invalid saved state flags")
             if s["isolated"] and s["selected_tooth"] != 16:
                 raise ValueError("Invalid isolated specimen")
-            s["rotation"] = {"yaw": number(s["rotation"]["yaw"], -180, 180), "pitch": number(s["rotation"]["pitch"], -80, 80)}
+            s["rotation"] = {"yaw": number(s["rotation"]["yaw"], -180, 180), "pitch": number(s["rotation"]["pitch"], -80, 80), "roll": number(s["rotation"].get("roll", 0), -180, 180)}
             s["zoom"] = number(s["zoom"], 0.6, 1.8)
-            s["tool_position"] = {"x": number(s["tool_position"]["x"], -1, 1), "y": number(s["tool_position"]["y"], -1, 1)}
+            s["tool_position"] = {k: number(s["tool_position"].get(k, 0), -1, 1) for k in ("x", "y", "z")}
+            s["tool_rotation"] = {k: number(s["tool_rotation"].get(k, 0), -180, 180) for k in ("yaw", "pitch", "roll")}
             if s["layer"] not in LAYERS or s["tool"] not in {"hand", "mirror", "explorer"} or s["mode"] not in {"manual", "gesture", "hand"}:
                 raise ValueError("Invalid saved controls")
             if not isinstance(s["checkpoints"], list) or len(s["checkpoints"]) > 3 or any(p not in {"located", "inspected", "mirror_placed"} for p in s["checkpoints"]):
@@ -159,16 +160,20 @@ class Engine:
         else:
             image = pose.get("image")
             aspect = image["width"] / image["height"] if image else 4/3
-            action, feedback = self.hand_controller.step(s, pose["hands"], self.state["vision"]["dominant_hand"], (s["id"], s["gesture_epoch"], s["tool"]), aspect)
+            actions, feedback = self.hand_controller.step(s, pose["hands"], self.state["vision"]["dominant_hand"], (s["id"], s["gesture_epoch"], s["tool"]), aspect)
             self.state["hand_control"] = feedback
-            if action:
-                kind, payload = action
-                key = {"rotate":"rotation", "zoom":"zoom", "move_tool":"tool_position"}[kind]
-                target = payload["value"] if kind == "zoom" else payload
-                if s[key] != target:
-                    self._action(kind, payload)
+            for kind, payload in actions:
+                if kind == "zoom" and s["zoom"] == payload["value"]:
+                    continue
+                if kind == "rotate" and all(s["rotation"].get(k) == v for k,v in payload.items()):
+                    continue
+                if kind == "move_tool" and all((s["tool_position"] if k in {"x","y","z"} else s["tool_rotation"]).get(k) == v for k,v in payload.items()):
+                    continue
+                before = (copy.deepcopy(s["rotation"]), s["zoom"], copy.deepcopy(s["tool_position"]), copy.deepcopy(s["tool_rotation"]))
+                self._action(kind, payload)
+                if before != (s["rotation"], s["zoom"], s["tool_position"], s["tool_rotation"]):
                     self._hand_dirty = True
-        active = {"rotating", "moving_tool", "zooming"}
+        active = {"rotating", "moving_tool", "zooming", "bimanual"}
         if self._hand_dirty and (time.monotonic() - self._last_hand_checkpoint >= 0.5 or previous_phase in active and self.state["hand_control"]["phase"] not in active):
             self.checkpoint()
 
@@ -270,7 +275,7 @@ class Engine:
             if not s["isolated"]:
                 raise ValueError("Isolate the specimen first")
             if action == "rotate":
-                s["rotation"] = {"yaw": number(payload.get("yaw"), -180, 180), "pitch": number(payload.get("pitch"), -80, 80)}
+                s["rotation"] = {"yaw": number(payload.get("yaw"), -180, 180), "pitch": number(payload.get("pitch"), -80, 80), "roll": number(payload.get("roll", s["rotation"]["roll"]), -180, 180)}
                 if abs(s["rotation"]["yaw"]) + abs(s["rotation"]["pitch"]) > 5:
                     self._checkpoint("inspected")
             elif action == "zoom":
@@ -286,7 +291,9 @@ class Engine:
             elif action == "move_tool":
                 if s["tool"] == "hand":
                     raise ValueError("Choose an instrument first")
-                s["tool_position"] = {"x": number(payload.get("x"), -1, 1), "y": number(payload.get("y"), -1, 1)}
+                position = {k: number(payload.get(k, s["tool_position"][k]), -1, 1) for k in ("x", "y", "z")}
+                rotation = {k: number(payload.get(k, s["tool_rotation"][k]), -180, 180) for k in ("yaw", "pitch", "roll")}
+                s.update(tool_position=position, tool_rotation=rotation)
             elif action == "place_tool":
                 if s["tool"] != "mirror":
                     raise ValueError("The activity asks you to place the mirror")
@@ -295,7 +302,7 @@ class Engine:
         elif action == "reset":
             if payload.get("confirm") is not True:
                 raise ValueError("Confirm before resetting the view")
-            s.update(rotation={"yaw": 0.0, "pitch": 0.0}, zoom=1.0, tool_position={"x": 0.7, "y": 0.0})
+            s.update(rotation={"yaw": 0.0, "pitch": 0.0, "roll": 0.0}, zoom=1.0, tool_position={"x": 0.7, "y": 0.0, "z": 0.0}, tool_rotation={"yaw": 0.0, "pitch": 0.0, "roll": 0.0})
         elif action == "pause":
             self._pause("manual")
         elif action == "resume":

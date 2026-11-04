@@ -37,12 +37,12 @@ The first complete learning activity is: identify tooth 16, inspect its form, ex
 
 - A schematic specimen may be used while building interaction. It must be visibly labelled and cannot satisfy the reviewed anatomical asset requirement.
 - Record asset source, creator, license, modifications and faculty/anatomy review before claiming anatomical validation.
-- Camera frames are processed locally, never included in TCP messages, and are not recorded by default.
+- Camera frames are processed locally. Mirrored JPEG previews and paired landmarks travel over loopback TCP/WebSocket in memory; they are not recorded or persisted.
 - Collected gesture templates need permission for use; store trajectories without participant names.
 
 ## Deferred scope
 
-Full treatment simulation, diagnosis, scoring clinical performance, recognizing physical dental instruments, a full 3D dentition, cloud accounts, instructor rosters and mobile delivery. The user explicitly expanded scope to both hands and all fingers: dedicated Hand Landmarker, live per-hand pose/motion signals and independent overlays are now required. Binding those signals to scene commands and physically validating them remain separate tasks. The existing DollarPy vocabulary uses deliberately recorded V, circle and Z paths.
+Full treatment simulation, diagnosis, scoring clinical performance, recognizing physical dental instruments, a full 3D dentition, cloud accounts, instructor rosters and mobile delivery. The user explicitly expanded scope to both hands and all fingers: dedicated Hand Landmarker, live per-hand pose/motion signals and independent overlays are now required. Live hand scene bindings are implemented. Instrument mode assigns left-hand tooth rotation/roll/depth zoom and right-hand instrument XYZ/orientation, with independent grabs and loss recovery. Physical validation of the full new bimanual journey remains separate. The existing DollarPy vocabulary uses deliberately recorded V, circle and Z paths.
 
 ## Open rubric questions
 

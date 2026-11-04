@@ -48,7 +48,7 @@ def engine():
 
 def test_fist_grab_rotates_without_jumping_and_release_persists(engine):
     frame(engine,[hand(pose="fist",x=.8)])
-    assert engine.state["session"]["rotation"] == {"yaw":0,"pitch":0}
+    assert engine.state["session"]["rotation"] == {"yaw":0,"pitch":0,"roll":0}
     frame(engine,[hand()])
     frame(engine,[hand(pose="fist")])
     assert engine.state["session"]["rotation"]["yaw"] == 0
@@ -97,12 +97,11 @@ def test_pinch_moves_instrument_and_hand_tool_pinch_rotates(engine):
 
 
 def test_two_pinch_zoom_has_priority_and_does_not_fall_into_instrument_drag(engine):
-    send(engine,"tool",{"tool":"mirror"})
     frame(engine,[hand("left",x=.3),hand("right",x=.7)])
     frame(engine,[hand("left","pinch",x=.3),hand("right","pinch",x=.7)])
     frame(engine,[hand("right","pinch",x=.8),hand("left","pinch",x=.2)])
     assert 1.4 < engine.state["session"]["zoom"] < 1.6
-    assert engine.state["session"]["tool_position"] == {"x":.7,"y":0}
+    assert engine.state["session"]["tool_position"] == {"x":.7,"y":0,"z":0}
     before = copy.deepcopy(engine.state["session"])
     frame(engine,[hand("left",x=.2),hand("right","pinch",x=.8)])
     frame(engine,[hand("left",x=.2),hand("right","pinch",x=.9)])
@@ -148,7 +147,7 @@ def test_pause_reset_and_old_epoch_never_replay_a_grab(engine):
     frame(engine,[hand()]); frame(engine,[hand(pose="fist")]); frame(engine,[hand(pose="fist",x=.8)])
     send(engine,"reset",{"confirm":True})
     frame(engine,[hand(pose="fist",x=.9)])
-    assert engine.state["session"]["rotation"] == {"yaw":0,"pitch":0}
+    assert engine.state["session"]["rotation"] == {"yaw":0,"pitch":0,"roll":0}
 
 
 def test_stale_video_pauses_and_body_visibility_does_not_gate_hands(engine,monkeypatch):
@@ -199,3 +198,96 @@ def test_worker_loss_flushes_and_restart_restores_paused_hand_mode(engine):
     assert restored.state["session"]["rotation"] == retained
     assert restored.state["session"]["paused"] and restored.state["session"]["mode"] == "hand"
     assert restored.state["vision"]["pose"] is None
+
+
+def test_both_hands_move_independent_targets_in_the_same_frame(engine):
+    send(engine,"tool",{"tool":"mirror"})
+    frame(engine,[hand("left",x=.3),hand("right",x=.7)])
+    frame(engine,[hand("right","pinch",x=.7),hand("left","fist",x=.3)])
+    frame(engine,[hand("left","fist",x=.4,y=.56,roll=25),hand("right","pinch",x=.65,y=.56,roll=-20)])
+    s = engine.state["session"]
+    assert s["rotation"]["yaw"] > 35 and s["rotation"]["pitch"] > 15 and s["rotation"]["roll"] > 15
+    assert s["tool_position"]["x"] < .6 and s["tool_position"]["y"] < -.15
+    assert s["tool_rotation"]["roll"] < -15
+    assert engine.state["hand_control"]["phase"] == "bimanual"
+    assert engine.state["hand_control"]["hands"] == ["left","right"]
+
+
+def test_two_pinches_keep_instrument_roles_instead_of_zoom_override(engine):
+    send(engine,"tool",{"tool":"explorer"})
+    frame(engine,[hand("left",x=.3),hand("right")])
+    frame(engine,[hand("left","pinch",x=.3),hand("right","pinch")])
+    frame(engine,[hand("left","pinch",x=.2),hand("right","pinch",x=.8)])
+    assert engine.state["session"]["rotation"]["yaw"] < -35
+    assert engine.state["session"]["tool_position"]["x"] > .95
+    assert engine.state["session"]["zoom"] == 1
+
+
+def test_depth_drives_left_zoom_and_right_xyz_independently(engine):
+    send(engine,"tool",{"tool":"mirror"})
+    left, right = hand("left",x=.3), hand("right")
+    frame(engine,[left,right])
+    left, right = hand("left","fist",x=.3), hand("right","pinch")
+    left["palm_span"] = right["palm_span"] = .12
+    frame(engine,[left,right])
+    left["palm_span"],right["palm_span"] = .18,.08
+    frame(engine,[left,right])
+    assert engine.state["session"]["zoom"] > 1.4
+    assert engine.state["session"]["tool_position"]["z"] < -.5
+
+
+def test_losing_right_hand_does_not_stop_left_and_reentry_needs_release(engine):
+    send(engine,"tool",{"tool":"mirror"})
+    frame(engine,[hand("left",x=.3),hand("right")])
+    frame(engine,[hand("left","fist",x=.3),hand("right","fist")])
+    frame(engine,[hand("left","fist",x=.4),hand("right","fist",x=.75)])
+    p = copy.deepcopy(engine.state["session"]["tool_position"])
+    frame(engine,[hand("left","fist",x=.45)])
+    r = copy.deepcopy(engine.state["session"]["rotation"])
+    frame(engine,[hand("left","fist",x=.5),hand("right","fist",x=.3)])
+    frame(engine,[hand("left","fist",x=.55),hand("right","fist",x=.4)])
+    assert engine.state["session"]["tool_position"] == p
+    assert engine.state["session"]["rotation"]["yaw"] > r["yaw"]
+    frame(engine,[hand("left","fist",x=.55),hand("right",x=.4)])
+    frame(engine,[hand("left","fist",x=.55),hand("right","fist",x=.4)])
+    assert engine.state["session"]["tool_position"] == p
+    frame(engine,[hand("left","fist",x=.55),hand("right","fist",x=.5)])
+    assert engine.state["session"]["tool_position"]["x"] > p["x"]
+
+
+def test_switching_tools_cannot_reuse_held_grabs(engine):
+    send(engine,"tool",{"tool":"mirror"})
+    frame(engine,[hand("left",x=.3),hand("right")])
+    frame(engine,[hand("left","fist",x=.3),hand("right","pinch")])
+    frame(engine,[hand("left","fist",x=.4),hand("right","pinch",x=.8)])
+    send(engine,"tool",{"tool":"explorer"})
+    s = copy.deepcopy(engine.state["session"])
+    frame(engine,[hand("left","fist",x=.6),hand("right","pinch",x=.6)])
+    assert engine.state["session"]["rotation"] == s["rotation"]
+    assert engine.state["session"]["tool_position"] == s["tool_position"]
+
+
+def test_xyz_orientation_persist_and_legacy_2d_checkpoint_migrates(engine):
+    send(engine,"tool",{"tool":"mirror"})
+    send(engine,"move_tool",{"x":.2,"y":-.1,"z":-.35,"yaw":30,"pitch":-20,"roll":45})
+    send(engine,"rotate",{"yaw":12,"pitch":23,"roll":34})
+    restored=Engine(engine.store)
+    assert restored.state["session"]["tool_position"] == {"x":.2,"y":-.1,"z":-.35}
+    assert restored.state["session"]["tool_rotation"] == {"yaw":30,"pitch":-20,"roll":45}
+    assert restored.state["session"]["rotation"]["roll"] == 34
+    legacy=copy.deepcopy(engine.state["session"])
+    legacy["rotation"].pop("roll"); legacy["tool_position"].pop("z"); legacy.pop("tool_rotation")
+    engine.store.save_workspace("guest",legacy,"right")
+    restored=Engine(engine.store)
+    assert restored.state["session"]["id"] == legacy["id"]
+    assert restored.state["session"]["rotation"]["roll"] == 0
+    assert restored.state["session"]["tool_position"]["z"] == 0
+
+
+@pytest.mark.parametrize("payload",[{"z":2},{"z":float("nan")},{"yaw":True},{"pitch":181},{"roll":-181}])
+def test_invalid_tool_depth_or_angles_are_transactionally_rejected(engine,payload):
+    send(engine,"tool",{"tool":"mirror"})
+    retained=copy.deepcopy(engine.state["session"])
+    with pytest.raises(ValueError):
+        send(engine,"move_tool",{"x":.4,**payload})
+    assert engine.state["session"] == retained

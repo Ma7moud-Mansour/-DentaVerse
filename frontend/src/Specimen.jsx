@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import {
+  buildInstrument,
+  positionInstrument,
+  probeSurface,
+  visibleSurfacePlacement,
+  TOOL_SCALE,
+  TOOL_DEPTH,
+} from "./instruments";
 
 const MODEL_URL = "/models/maxillary-first-molar-left.glb";
 const clamp = THREE.MathUtils.clamp;
@@ -99,68 +107,20 @@ function prepareModel(source) {
   return specimen;
 }
 
-function buildInstrument() {
-  const tool = new THREE.Group();
-  const metal = new THREE.MeshStandardMaterial({
-    color: 0xc5d3cb,
-    metalness: 0.75,
-    roughness: 0.25,
-  });
-  const grip = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.038, 0.045, 1.12, 20),
-    metal,
-  );
-  grip.position.y = -0.5;
-  tool.add(grip);
-  const mirror = new THREE.Group();
-  mirror.add(
-    new THREE.Mesh(new THREE.TorusGeometry(0.205, 0.025, 12, 40), metal),
-  );
-  mirror.add(
-    new THREE.Mesh(
-      new THREE.CircleGeometry(0.19, 40),
-      new THREE.MeshStandardMaterial({
-        color: 0xb7d1cd,
-        metalness: 0.8,
-        roughness: 0.14,
-        side: THREE.DoubleSide,
-      }),
-    ),
-  );
-  mirror.position.y = 0.18;
-  tool.add(mirror);
-  tool.add(
-    new THREE.Mesh(
-      new THREE.TubeGeometry(
-        new THREE.CatmullRomCurve3([
-          new THREE.Vector3(0, 0.06, 0),
-          new THREE.Vector3(0, 0.27, 0),
-          new THREE.Vector3(-0.13, 0.35, 0),
-          new THREE.Vector3(-0.18, 0.25, 0),
-        ]),
-        24,
-        0.015,
-        8,
-        false,
-      ),
-      metal,
-    ),
-  );
-  tool.rotation.z = -0.35;
-  return tool;
-}
-
 export default function Specimen({
   session,
   compact = false,
   disabled = false,
+  suspended = false,
   onAction,
 }) {
   const instrumentHandle = useRef(null);
+  const [probe, setProbe] = useState("away");
+  const [marked, setMarked] = useState(0);
   const mount = useRef(null),
     sceneRef = useRef(null);
-  const latest = useRef({ session, disabled, onAction });
-  latest.current = { session, disabled, onAction };
+  const latest = useRef({ session, disabled, suspended, onAction });
+  latest.current = { session, disabled, suspended, onAction };
   const [loadState, setLoadState] = useState("loading");
 
   useEffect(() => {
@@ -199,6 +159,15 @@ export default function Specimen({
     scene.add(tooth);
     const tool = buildInstrument();
     scene.add(tool);
+    const contact = new THREE.Mesh(
+      new THREE.SphereGeometry(0.055, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0xd9f399, depthTest: false }),
+    );
+    contact.visible = false;
+    contact.renderOrder = 10;
+    scene.add(contact);
+    const marks = new THREE.Group();
+    tooth.add(marks);
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(1.4, 0.005, 8, 96),
       new THREE.MeshBasicMaterial({ color: 0x405d4c }),
@@ -216,6 +185,9 @@ export default function Specimen({
       pending: {},
       values: {},
       lastSent: 0,
+      displayedTool: null,
+      lastProbe: 0,
+      markers: marks,
     };
     sceneRef.current = view;
     const raycaster = new THREE.Raycaster();
@@ -228,17 +200,124 @@ export default function Specimen({
       view.ready &&
       Boolean(latest.current.onAction);
     const draw = () => {
+      scene.updateMatrixWorld(true);
+      if (
+        view.ready &&
+        latest.current.session?.tool === "explorer" &&
+        performance.now() - view.lastProbe > 90
+      ) {
+        view.lastProbe = performance.now();
+        const result = probeSurface(tooth, tool);
+        view.probe = result;
+        contact.visible = result.kind === "contact";
+        if (contact.visible) contact.position.copy(result.point);
+        setProbe((old) => (old === result.kind ? old : result.kind));
+      } else if (latest.current.session?.tool !== "explorer")
+        contact.visible = false;
       renderer.render(scene, camera);
       const handle = instrumentHandle.current;
       if (handle) {
         const point = tool
-          .localToWorld(new THREE.Vector3(0, 0.18, 0))
+          .localToWorld(new THREE.Vector3(0, 0, 0))
           .project(camera);
         handle.style.left = `${(point.x * 0.5 + 0.5) * host.clientWidth}px`;
         handle.style.top = `${(-point.y * 0.5 + 0.5) * host.clientHeight}px`;
       }
     };
     view.draw = draw;
+    const goalRotation = new THREE.Quaternion();
+    view.updateTransforms = (alpha = 1) => {
+      if (!view.values.rotation) return;
+      const { yaw, pitch, roll = 0 } = view.values.rotation;
+      goalRotation.setFromEuler(
+        new THREE.Euler(
+          degrees(pitch) + 0.15,
+          degrees(yaw) - 0.4,
+          degrees(roll),
+        ),
+      );
+      let moving =
+        tooth.quaternion.angleTo(goalRotation) > 0.0001 ||
+        Math.abs(7.6 / view.values.zoom - camera.position.z) > 0.0001;
+      tooth.quaternion.slerp(goalRotation, alpha);
+      camera.position.z += (7.6 / view.values.zoom - camera.position.z) * alpha;
+      const target = {
+        ...view.values.tool_position,
+        ...view.values.tool_rotation,
+      };
+      view.displayedTool ??= { ...target };
+      for (const key of Object.keys(target)) {
+        moving ||=
+          Math.abs((target[key] || 0) - (view.displayedTool[key] || 0)) >
+          0.0001;
+        view.displayedTool[key] +=
+          ((target[key] || 0) - (view.displayedTool[key] || 0)) * alpha;
+      }
+      const t = view.displayedTool;
+      positionInstrument(
+        tool,
+        latest.current.session?.tool ?? "hand",
+        t,
+        t,
+        camera,
+      );
+      return moving;
+    };
+    let animation,
+      previousTime = performance.now();
+    const animate = (now) => {
+      if (disposed) return;
+      const session = latest.current.session;
+      if (session?.mode === "hand" && !session.paused && view.values.rotation) {
+        const dt = Math.min(0.05, (now - previousTime) / 1000);
+        // Render between ~15 Hz sensor frames; no extra fixed-frame input delay.
+        if (view.updateTransforms(1 - Math.exp(-dt / 0.035))) draw();
+      }
+      previousTime = now;
+      animation = requestAnimationFrame(animate);
+    };
+    animation = requestAnimationFrame(animate);
+    view.touchSurface = () => {
+      if (!enabled() || latest.current.session.tool !== "explorer") return;
+      scene.updateMatrixWorld(true);
+      const point = visibleSurfacePlacement(tooth, tool, camera);
+      if (!point) {
+        setProbe("miss");
+        return;
+      }
+      const tip = tool.localToWorld(new THREE.Vector3(-0.18, 0.25, 0));
+      const delta = point.sub(tip);
+      const p = view.values.tool_position;
+      send(
+        "move_tool",
+        {
+          x: clamp(p.x + delta.x / TOOL_SCALE, -1, 1),
+          y: clamp(p.y + delta.y / TOOL_SCALE, -1, 1),
+          z: clamp((p.z || 0) + delta.z / TOOL_DEPTH, -1, 1),
+        },
+        true,
+      );
+    };
+    view.markContact = () => {
+      if (
+        latest.current.suspended ||
+        latest.current.session?.paused ||
+        !view.probe ||
+        view.probe.kind !== "contact" ||
+        view.markers.children.length >= 8
+      )
+        return;
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.045, 12, 8),
+        new THREE.MeshBasicMaterial({ color: 0x88cfff, depthTest: false }),
+      );
+      marker.position.copy(tooth.worldToLocal(view.probe.point.clone()));
+      marker.renderOrder = 9;
+      marker.userData.surfaceMark = true;
+      view.markers.add(marker);
+      setMarked(view.markers.children.length);
+      draw();
+    };
     const send = (kind, payload, final = false) => {
       view.pending[kind] = { payload, at: performance.now() };
       if (final || performance.now() - view.lastSent > 45) {
@@ -307,8 +386,12 @@ export default function Specimen({
           -80,
           80,
         );
-        view.values.rotation = { yaw, pitch };
-        tooth.rotation.set(degrees(pitch) + 0.15, degrees(yaw) - 0.4, 0);
+        view.values.rotation = { ...view.values.rotation, yaw, pitch };
+        tooth.rotation.set(
+          degrees(pitch) + 0.15,
+          degrees(yaw) - 0.4,
+          degrees(view.values.rotation.roll || 0),
+        );
         send("rotate", { yaw, pitch });
       } else {
         const point = planePoint(event);
@@ -323,8 +406,9 @@ export default function Specimen({
           -1,
           1,
         );
-        view.values.tool_position = { x, y };
-        tool.position.set(x * 1.8, y * 1.8, 0.9);
+        view.values.tool_position = { ...view.values.tool_position, x, y };
+        view.displayedTool = null;
+        view.updateTransforms();
         send("move_tool", { x, y });
       }
       draw();
@@ -442,6 +526,8 @@ export default function Specimen({
     );
     return () => {
       disposed = true;
+      cancelAnimationFrame(animation);
+      tool.userData.reflector.dispose();
       observer.disconnect();
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("pointermove", onMove);
@@ -463,14 +549,29 @@ export default function Specimen({
     const { tooth, tool, camera, scene, renderer } = view;
     const actual = {
       rotation: session?.rotation ?? { yaw: 0, pitch: 0 },
-      tool_position: session?.tool_position ?? { x: 0.7, y: 0 },
+      tool_position: session?.tool_position ?? { x: 0.7, y: 0, z: 0 },
+      tool_rotation: session?.tool_rotation ?? { yaw: 0, pitch: 0, roll: 0 },
       zoom: session?.zoom ?? 1,
     };
+    const snap =
+      view.session !== session?.id ||
+      view.epoch !== session?.gesture_epoch ||
+      session?.paused;
     if (disabled || view.session !== session?.id) {
       view.drag = null;
       view.pending = {};
     }
+    if (view.session !== session?.id) {
+      view.markers.children.forEach((m) => {
+        m.geometry.dispose();
+        m.material.dispose();
+      });
+      view.markers.clear();
+      setMarked(0);
+    }
     view.session = session?.id;
+    view.epoch = session?.gesture_epoch;
+    view.values.tool_rotation = actual.tool_rotation;
     for (const [kind, key] of [
       ["rotate", "rotation"],
       ["move_tool", "tool_position"],
@@ -488,26 +589,32 @@ export default function Specimen({
         delete view.pending[kind];
       }
     }
-    const { yaw, pitch } = view.values.rotation;
-    tooth.rotation.set(degrees(pitch) + 0.15, degrees(yaw) - 0.4, 0);
+
     const layer = session?.layer ?? "surface";
     tooth.traverse((object) => {
       if (["surface", "dentin", "pulp"].includes(object.name))
         object.visible =
           object.name === (layer === "enamel" ? "surface" : layer);
     });
-    tool.visible = Boolean(session?.tool && session.tool !== "hand");
-    tool.children[1].visible = session?.tool === "mirror";
-    tool.children[2].visible = session?.tool === "explorer";
-    tool.position.set(
-      view.values.tool_position.x * 1.8,
-      view.values.tool_position.y * 1.8,
-      0.9,
-    );
-    camera.position.z = 7.6 / view.values.zoom;
+    if (session?.mode !== "hand" || snap) {
+      view.displayedTool = null;
+      view.updateTransforms();
+      view.lastProbe = 0;
+    }
     renderer.domElement.style.cursor =
       compact || disabled ? "default" : view.drag ? "grabbing" : "grab";
-    view.draw();
+    const signature = JSON.stringify({
+      ...actual,
+      layer,
+      tool: session?.tool,
+      paused: session?.paused,
+      epoch: session?.gesture_epoch,
+      loadState,
+    });
+    if (view.drawSignature !== signature) {
+      view.drawSignature = signature;
+      view.draw();
+    }
   }, [session, disabled, compact, loadState]);
 
   const internal = session?.layer === "dentin" || session?.layer === "pulp";
@@ -542,6 +649,70 @@ export default function Specimen({
           <span aria-hidden="true">✥</span>
         </button>
       )}
+      {!compact && session?.tool !== "hand" && (
+        <div
+          className="instrument-readout"
+          aria-label="Instrument feedback"
+          data-probe={session?.tool === "explorer" ? probe : "reflection"}
+        >
+          <strong>
+            {session?.tool === "mirror"
+              ? "Live mirror reflection"
+              : probe === "contact"
+                ? "Tip touching the surface"
+                : probe === "inside"
+                  ? "Tip inside model · move outward"
+                  : probe === "miss"
+                    ? "Move the tip over the tooth first"
+                    : "Bring the explorer tip to the surface"}
+          </strong>
+          <span>
+            {session?.tool === "mirror"
+              ? "Move XYZ and tilt your right palm to change the reflected view."
+              : "The contact marker follows the visible mesh. No force or clinical score is measured."}
+          </span>
+          {session?.tool === "explorer" && (
+            <div className="instrument-actions">
+              {session.mode !== "hand" && (
+                <button
+                  disabled={disabled}
+                  onClick={() => sceneRef.current?.touchSurface()}
+                >
+                  Touch visible surface
+                </button>
+              )}
+              <button
+                disabled={
+                  suspended ||
+                  session.paused ||
+                  probe !== "contact" ||
+                  marked >= 8
+                }
+                onClick={() => sceneRef.current?.markContact()}
+              >
+                Mark contact ({marked}/8)
+              </button>
+              {marked > 0 && (
+                <button
+                  onClick={() => {
+                    const v = sceneRef.current;
+                    v.markers.children.forEach((m) => {
+                      m.geometry.dispose();
+                      m.material.dispose();
+                    });
+                    v.markers.clear();
+                    setMarked(0);
+                    v.draw();
+                  }}
+                >
+                  Clear marks
+                </button>
+              )}
+            </div>
+          )}
+          {marked > 0 && <small>Marks belong to this open view.</small>}
+        </div>
+      )}
       {loadState === "loading" && (
         <div className="canvas-fallback" role="status">
           Loading the molar…
@@ -558,8 +729,9 @@ export default function Specimen({
           <div className="viewer-instructions">
             {session?.mode === "hand" ? (
               <>
-                Open palm, then grip to rotate <span>·</span> Two pinches to
-                zoom
+                {session.tool === "hand"
+                  ? "Grip to rotate · Two pinches to zoom"
+                  : "Left hand: tooth · Right hand: instrument XYZ"}
               </>
             ) : (
               <>

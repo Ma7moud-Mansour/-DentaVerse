@@ -34,9 +34,9 @@ def content_for(state: dict) -> dict:
         if session["mode"] == "hand" and session["pause_reason"] == "tracking":
             recovery = "Restore the camera, resume explicitly, then show an open hand before grabbing the specimen."
     tool = session["tool"]
-    tool_help = "Rotate the specimen using the view controls." if tool == "hand" else f"Position the virtual {tool}, then confirm placement. This is an interaction exercise."
+    tool_help = "Rotate the specimen using the view controls." if tool == "hand" else "Move and tilt the virtual mirror to inspect the live reflected model." if tool == "mirror" else "Bring the explorer tip to the visible surface. A highlight marks contact; blue marks let you compare locations."
     if session["mode"] == "hand":
-        tool_help = "Show an open palm, then grip or pinch to rotate the specimen. Two pinches control zoom." if tool == "hand" else f"Pinch and move to position the virtual {tool}; open your hand to release. A fist rotates the specimen."
+        tool_help = "Show an open palm, then grip or pinch to rotate the specimen. Two pinches control zoom." if tool == "hand" else f"Left hand: rotate the tooth and use depth to zoom. Right hand: move the {tool} in XYZ and tilt your palm. Open each hand to release it independently."
     return {
         **base,
         "layer_title": layer_title,

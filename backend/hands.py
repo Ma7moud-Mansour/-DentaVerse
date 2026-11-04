@@ -76,21 +76,27 @@ class HandTracker:
                 if raw == "partial" or samples >= 3 and now - since >= 0.12:
                     stable = raw
             center = {axis: sum(points[i][axis] for i in (0,5,9,13,17)) / 5 for axis in ("x", "y")}
+            palm_span = sum(math.hypot((points[a]["x"]-points[b]["x"])*aspect, points[a]["y"]-points[b]["y"]) for a,b in ((5,17),(0,9)))/2
             roll = math.degrees(math.atan2((points[9]["x"] - points[0]["x"]) * aspect, points[0]["y"] - points[9]["y"]))
             motion = {"x": 0.0, "y": 0.0, "roll": 0.0}
             if previous and in_frame:
-                weight = 1 - math.exp(-max(0, now - previous["time"]) / 0.07)
+                dt = max(.001, now-previous["time"])
+                speed = math.hypot((center["x"]-previous["center"]["x"])*aspect, center["y"]-previous["center"]["y"])/dt
+                # Stronger jitter suppression while still; follow intentional motion quickly.
+                weight = 1 - math.exp(-dt / (.085/(1+min(speed,4)*4)))
+                depth_weight = 1-math.exp(-dt/.09)
+                palm_span = previous["palm_span"]+depth_weight*(palm_span-previous["palm_span"])
                 center = {axis: previous["center"][axis] + weight * (center[axis] - previous["center"][axis]) for axis in ("x", "y")}
                 delta_roll = (roll - previous["roll"] + 180) % 360 - 180
                 filtered_roll = previous["roll"] + weight * delta_roll
                 motion = {"x": center["x"] - previous["center"]["x"], "y": center["y"] - previous["center"]["y"], "roll": weight * delta_roll}
                 roll = (filtered_roll + 180) % 360 - 180
             updated[side] = dict(time=now, wrist=wrist, pinch=pinch, candidate=candidate, since=since, samples=samples,
-                stable=stable, center=center, roll=roll)
+                stable=stable, center=center, roll=roll, palm_span=palm_span)
             results.append({"id": side, "handedness": side, "score": round(detection["score"] if detection["handedness"] == side else 1 - detection["score"], 4),
                 "landmarks": points, "gesture": stable, "fingers": fingers, "extended_fingers": sum(fingers.values()),
                 "pinch_ratio": round(pinch_ratio, 4), "in_frame": in_frame, "center": {k: round(v,6) for k,v in center.items()},
-                "roll": round(roll,3), "motion": {k: round(v,6) for k,v in motion.items()}})
+                "roll": round(roll,3), "palm_span": round(palm_span,6), "motion": {k: round(v,6) for k,v in motion.items()}})
         self.tracks = updated
         return sorted(results, key=lambda hand: hand["id"])
 
@@ -123,4 +129,6 @@ def validate_hands(hands):
             "in_frame": hand["in_frame"], "pinch_ratio": number(hand.get("pinch_ratio"),0,10), "roll": number(hand.get("roll"),-180,180),
             "center": {k: number(center.get(k),-2,3) for k in ("x","y")},
             "motion": {k: number(motion.get(k),-180 if k == "roll" else -5,180 if k == "roll" else 5) for k in ("x","y","roll")}})
+        if "palm_span" in hand:
+            result[-1]["palm_span"] = number(hand["palm_span"],0,5)
     return result

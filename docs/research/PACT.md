@@ -7,7 +7,7 @@ These are design assumptions pending the survey and observed-use study. Do not d
 | People | Beginners may not know FDI notation or gestures | Tooth number plus name, full guidance, visible gesture guide | Ask learners to identify the selected tooth without prompting |
 | People | Experienced learners may want less onboarding | Server-selected concise content and deeper prompts | Compare content for two registered profiles |
 | People | Demonstrators explain to groups | Teaching prompts, persistent anatomical labels | Demonstrator walkthrough |
-| People | Dominant hand and movement comfort vary | Choose dominant wrist; offer manual operation and explicit pause | Test both configured hands and keyboard controls |
+| People | Dominant hand and movement comfort vary | Choose dominant wrist for recorded paths; fixed left-tooth/right-instrument roles follow the requested bimanual design; offer manual operation and explicit pause | Test both configured hands and keyboard controls |
 | Activities | Find and isolate a tooth | Tooth map, selected identity, isolate command | Complete the FDI 16 selection task |
 | Activities | Inspect layers and use tools | Layer controls, named active tool, task-specific help | Ask which object the next action will move |
 | Activities | Save and reflect | Review and per-user journal | Save, restart, then retrieve the note |

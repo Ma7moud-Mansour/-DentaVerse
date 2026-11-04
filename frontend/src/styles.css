@@ -1613,6 +1613,65 @@ select {
   font-size: 7px;
   letter-spacing: 0.5px;
 }
+.instrument-readout {
+  position: absolute;
+  z-index: 3;
+  left: 20px;
+  right: 20px;
+  bottom: 82px;
+  max-width: 400px;
+  padding: 10px 13px;
+  border: 1px solid #526d5a;
+  border-radius: 7px;
+  background: #172b24ed;
+  color: #d6e1ca;
+  font-size: 10px;
+}
+.instrument-readout strong,
+.instrument-readout > span {
+  display: block;
+}
+.instrument-readout > span {
+  color: #adc1a7;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.instrument-readout[data-probe="contact"] {
+  border-color: #d9f399;
+}
+.instrument-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+.instrument-actions button {
+  border: 1px solid #6b825f;
+  border-radius: 4px;
+  background: #294334;
+  color: #e4eecd;
+  padding: 7px 9px;
+}
+.instrument-actions button:disabled {
+  opacity: 0.5;
+}
+.hand-roles {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0;
+}
+.hand-roles span {
+  font-size: 10px;
+  color: #62766a;
+}
+.hand-roles b {
+  display: block;
+  color: #244e64;
+  margin-bottom: 3px;
+}
+.hand-roles span:last-child b {
+  color: #875e20;
+}
 .instrument-grab {
   position: absolute;
   width: 44px;

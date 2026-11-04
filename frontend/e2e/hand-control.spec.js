@@ -124,9 +124,10 @@ test("synthetic hands rotate the tooth, move the mirror and zoom through real so
     await expect.poll(() => sensor.session).toBeTruthy();
     await page.goto("/", { waitUntil: "domcontentloaded" });
     if (
-      await page
+      (await state()).session.paused ||
+      (await page
         .getByRole("button", { name: "Use manual controls", exact: true })
-        .isVisible()
+        .isVisible())
     )
       await page
         .getByRole("button", { name: "Use manual controls", exact: true })
@@ -202,17 +203,30 @@ test("synthetic hands rotate the tooth, move the mirror and zoom through real so
       .toBeLessThan(-0.2);
     sensor.set([hand("left", "open", 0.3), hand()]);
     await expect.poll(phase).toBe("ready");
-    sensor.set([hand("left", "pinch", 0.3), hand("right", "pinch")]);
-    await expect.poll(phase).toBe("zooming");
-    sensor.set([hand("left", "pinch", 0.15), hand("right", "pinch", 0.85)]);
+    const beforeDual = (await state()).session;
+    sensor.set([hand("left", "fist", 0.3), hand("right", "pinch")]);
+    await expect.poll(phase).toBe("bimanual");
+    const left = hand("left", "fist", 0.4, 0.57, 25),
+      right = hand("right", "pinch", 0.6, 0.6, -20);
+    left.palm_span = 0.14;
+    right.palm_span = 0.1;
+    // Establish relative depth at the held pose, then move each hand independently.
+    sensor.set([left, right]);
     await expect
-      .poll(async () => (await state()).session.zoom)
-      .toBeGreaterThan(1.5);
+      .poll(async () => (await state()).session.rotation.yaw)
+      .toBeGreaterThan(beforeDual.rotation.yaw + 30);
+    await expect
+      .poll(async () => (await state()).session.tool_rotation.roll)
+      .toBeLessThan(-10);
+    await expect
+      .poll(async () => (await state()).session.tool_position.x)
+      .toBeLessThan(beforeDual.tool_position.x - 0.3);
     const zoomed = (await state()).session;
-    sensor.set([hand("left", "open", 0.15), hand("right", "pinch", 0.85)]);
-    await expect.poll(phase).toBe("release");
-    sensor.set([hand("left", "open", 0.15), hand("right", "pinch", 0.9)]);
+    // Losing the instrument hand freezes only that target; left-hand motion continues.
+    sensor.set([hand("left", "fist", 0.45, 0.57, 25)]);
+    await expect.poll(phase).toBe("rotating");
     expect((await state()).session.tool_position).toEqual(zoomed.tool_position);
+    const retainedRotation = (await state()).session.rotation;
     sensor.pause();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(
@@ -227,7 +241,7 @@ test("synthetic hands rotate the tooth, move the mirror and zoom through real so
       .getByRole("button", { name: "Resume session", exact: true })
       .click();
     await expect.poll(phase).toBe("release");
-    expect((await state()).session.rotation).toEqual(zoomed.rotation);
+    expect((await state()).session.rotation).toEqual(retainedRotation);
     await page
       .getByRole("button", { name: "Use mouse & keyboard", exact: true })
       .click();

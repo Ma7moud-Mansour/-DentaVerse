@@ -2,17 +2,24 @@
 
 Open Anatomy atlas → Inspect specimen. Start the camera if needed and select **Enable hand controls**. Session setup also offers **Continue with hand controls**. Hand controls use the finger tracker directly and do not require shoulder calibration or stored DollarPy templates.
 
-| Movement | Scene action |
-|---|---|
-| Show an open palm | Arm that hand without moving the scene |
-| Close that hand and move sideways/up/down | Rotate/tilt the tooth from its existing angle |
-| Turn the gripped palm | Add rotation to the tooth |
-| Pinch with Hand selected | Grab and rotate the tooth |
-| Select Mirror/Explorer, then pinch and move | Move the selected instrument relative to its current position |
-| Pinch with both armed hands, then spread/close the gap | Zoom in/out from the current zoom |
-| Open the controlling hand | Release immediately and retain the scene |
+## Mirror or Explorer selected: two independent hands
 
-One open hand can arm independently while the other is closed. If both hands try to grab, the preferred hand is selected; the current grab retains ownership. Two pinches take priority for zoom. When zoom ends, release the held pinches and open your hands before another grab. The remaining pinch cannot turn into an accidental instrument drag.
+| Hand / movement | Action |
+|---|---|
+| Open either palm | Arm that hand independently, without moving either object |
+| Left fist or pinch, then move X/Y | Rotate the tooth in yaw/pitch, with increased response |
+| Turn the held left palm | Roll the tooth around its Z axis |
+| Bring the held left palm closer / farther | Zoom the tooth using relative apparent palm size |
+| Right fist or pinch, then move X/Y | Move the selected instrument horizontally / vertically |
+| Bring the held right palm closer / farther | Move the instrument in Z, independently of tooth zoom |
+| Tilt or turn the held right palm | Change instrument yaw/pitch/roll |
+| Open a controlling hand | Release only its object; the other hand can continue |
+
+Both fists and pinches may operate simultaneously. Two pinches do **not** switch to a shared zoom while an instrument is selected. Left/right mean anatomical hands as labelled in the camera overlay; preferred-wrist settings do not swap these fixed roles.
+
+## Hand tool selected
+
+Either armed hand can grip/pinch to rotate the tooth. If both try to grab, the preferred hand is selected and the current grab retains ownership. Two pinches take priority for span-based zoom only in this mode. When that zoom ends, release the held pinches and open your hands before another grab.
 
 In hand mode the camera and control feedback appear at the top of the inspector beside the specimen. Mouse dragging, wheel zoom, viewer keys and transform sliders are disabled in this mode. **Use mouse & keyboard** restores manual operation. Tool selection, layer selection and explicit reset remain available; they release the grab and require a new open-hand arm.
 
@@ -20,14 +27,30 @@ In hand mode the camera and control feedback appear at the top of the inspector 
 
 An open hand may have three or more visibly extended fingers and a released pinch; it does not need a perfectly straight five-finger classifier label. The controller reports missing, partial and stabilizing hands directly in the visible feedback beside the camera. Pointer transforms remain disabled while this hand mode is active.
 
-`backend/hand_control.py` maintains ephemeral grab anchors. Each gesture uses the current scene transform and current hand center as its baseline, so acquiring a grab does not snap the tooth/tool to a hand coordinate. Motion is relative, with dead zones and bounded yaw/pitch, instrument position and zoom. Open-hand arming accepts natural finger bend; raw opening/pinch-release geometry can release before the stable pose label finishes its short debounce.
+`backend/hand_control.py` maintains ephemeral grab anchors. Each gesture uses the current scene transform and current hand center as its baseline, so acquiring a grab does not snap the tooth/tool to a hand coordinate. Motion is relative, with dead zones and bounded yaw/pitch/roll, instrument XYZ/orientation and zoom. Open-hand arming accepts natural finger bend; raw opening/pinch-release geometry can release before the stable pose label finishes its short debounce.
 
 Validated vision POSE_FRAME messages carry `control_epoch`, echoed from coordinator context. Bindings require the active session/epoch, explicit hand mode, a fresh hand-capable camera frame, an isolated specimen on Workbench, no pause and no active gesture recording. UI navigation, reset, tool changes and input-mode transitions invalidate the anchors. Duplicate/older previews never replay movement. Pose shoulder visibility does not gate finger controls.
 
-Losing the controlling hand releases the grab. A closed hand reappearing in view must open before acquiring a new grab. Worker loss or a frame stream older than 0.8 seconds pauses hand mode; a 0.2-second coordinator monitor also catches silent camera stalls. Recovery requires fresh frames, explicit Resume, and an open hand. Timing/dead-zone values are initial engineering settings, not measured usability results.
+Losing a controlling hand releases its grab independently and clears its arming. The other instrument-mode hand can continue. A closed hand reappearing in view must open before acquiring a new grab. Worker loss or a frame stream older than 0.8 seconds pauses hand mode; a 0.2-second coordinator monitor also catches silent camera stalls. Recovery requires fresh frames, explicit Resume, and an open hand. Timing/dead-zone values are initial engineering settings, not measured usability results.
 
 The coordinator updates the same rotate/zoom/move_tool actions used by manual controls. Hand previews deliver authoritative session transforms and hand_control feedback to the browser over WebSocket. Motion checkpoints are saved at most twice per second and on release/loss; the journal still requires an explicit save. Camera images, hand coordinates and grab anchors are not persisted. Restored hand-mode workspaces start paused with empty sensor state.
 
+## Smoothing and depth
+
+Camera palm X/Y and roll use time-based adaptive filtering: stronger at rest and faster during deliberate movement. Overlay landmarks remain matched to the current video rather than lagging behind it. Apparent palm span has its own 90 ms filter. A 0.003 normalized X/Y dead zone and 420°/300° per normalized travel increase rotation response; small roll and relative-depth dead zones suppress jitter. These are engineering defaults requiring user evaluation, not measured optimum settings.
+
+The browser interpolates authoritative transforms by elapsed time (35 ms time constant), using quaternion interpolation for the tooth. It stops drawing settled frames, and snaps to authoritative retained state on pause, reset or epoch changes. Mouse input remains immediate. The server remains authoritative; interpolation does not produce extra commands.
+
+Monocular depth is inferred from **relative apparent palm size**, not metric camera Z. Turning a palm can also affect apparent size, so depth is approximate. Grab anchors reset at the current transform, size and orientation. Tool Z is bounded to [-1,1]; roll/yaw/pitch persist with workspace recovery, including migration from older 2D checkpoints.
+
+## Functional instruments
+
+The dental mirror uses Three.js Reflector with an offscreen scene render, not a metallic painted disc. Its starting angle bisects directions to the crown area and viewer; right-palm tilt or manual tilt sliders change the reflection. An empty reflection can mean the mirror is aimed away from the tooth. Reset restores a useful starting transform.
+
+Explorer feedback performs a radial approach test against the currently visible mesh. It shows away, inside-model, or surface contact and highlights the intersection. This is a visual geometry exercise without physical force, millimetre measurements or clinical scoring. Manual mode includes **Touch visible surface** to place the tip at the camera-ray intersection when it is over the tooth. Up to eight blue contact marks follow the rotated model in the current open view; they are cleared on remount/session changes and are not saved journal annotations. Pause/disconnection disables marking. Internal tissues remain illustrative.
+
 ## Verification
 
-Python checks cover arming without jumps, one-hand independence, naturally bent fingers, relative rotation/palm roll, instrument movement, zoom priority, release/loss, stale context, reset/pause/resume, old/duplicate frames, persistence and restart. Browser checks use synthetic hand signals through real TCP/WebSocket connections to rotate the rendered tooth, move the mirror, zoom, recover from a stalled stream, block mouse transforms in hand mode and retain the transforms after reload. Physical feedback is recorded separately in PROGRESS.md; synthetic checks do not establish recognition accuracy.
+Python checks cover arming without jumps, one-hand independence, naturally bent fingers, relative rotation/palm roll, simultaneous left/right movement and loss, independent depth/orientation, legacy checkpoint migration, Hand-tool zoom priority, release/loss, stale context, reset/pause/resume, old/duplicate frames, persistence and restart. Browser checks use synthetic hand signals through real TCP/WebSocket connections to rotate the rendered tooth, move the mirror, zoom, recover from a stalled stream, block mouse transforms in hand mode and retain the transforms after reload. Physical feedback is recorded separately in PROGRESS.md; synthetic checks do not establish recognition accuracy.
+
+Instrument browser checks also read actual reflection render-target pixels before/after removing a synthetic target, detect real sphere-surface contact/penetration, exercise the licensed model contact/mark controls and verify depth/orientation recovery. These are geometry/software checks, not human tracking or clinical validation.

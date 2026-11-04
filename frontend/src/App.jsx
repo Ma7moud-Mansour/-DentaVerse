@@ -441,6 +441,7 @@ export default function App() {
                 </div>
                 <Specimen
                   session={s}
+                  suspended={sceneBlocked || !s.isolated}
                   disabled={sceneBlocked || !s.isolated || s.mode === "hand"}
                   onAction={send}
                 />
@@ -557,6 +558,15 @@ export default function App() {
                     disabled={sceneBlocked || !s.isolated || s.mode === "hand"}
                     onChange={(value) => send("zoom", { value })}
                   />
+                  <Range
+                    label="Roll specimen"
+                    min={-180}
+                    max={180}
+                    value={s.rotation.roll ?? 0}
+                    unit="°"
+                    disabled={sceneBlocked || !s.isolated || s.mode === "hand"}
+                    onChange={(roll) => send("rotate", { ...s.rotation, roll })}
+                  />
                 </div>
                 <div className="inspector-section">
                   <Eyebrow>Instrument tray</Eyebrow>
@@ -607,6 +617,42 @@ export default function App() {
                       >
                         Confirm mirror placement <Check size={14} />
                       </Button>
+                      <Range
+                        label="Tool depth"
+                        min={-1}
+                        max={1}
+                        step="any"
+                        value={s.tool_position.z ?? 0}
+                        disabled={sceneBlocked || s.mode === "hand"}
+                        onChange={(z) => send("move_tool", { z })}
+                      />
+                      <Range
+                        label="Tool tilt horizontal"
+                        min={-80}
+                        max={80}
+                        value={s.tool_rotation?.yaw ?? 0}
+                        unit="°"
+                        disabled={sceneBlocked || s.mode === "hand"}
+                        onChange={(yaw) => send("move_tool", { yaw })}
+                      />
+                      <Range
+                        label="Tool tilt vertical"
+                        min={-80}
+                        max={80}
+                        value={s.tool_rotation?.pitch ?? 0}
+                        unit="°"
+                        disabled={sceneBlocked || s.mode === "hand"}
+                        onChange={(pitch) => send("move_tool", { pitch })}
+                      />
+                      <Range
+                        label="Tool roll"
+                        min={-180}
+                        max={180}
+                        value={s.tool_rotation?.roll ?? 0}
+                        unit="°"
+                        disabled={sceneBlocked || s.mode === "hand"}
+                        onChange={(roll) => send("move_tool", { roll })}
+                      />
                     </>
                   )}
                 </div>
@@ -1160,7 +1206,7 @@ function Range({ label, value, unit = "", onChange, ...props }) {
       <span>
         {label}
         <output>
-          {Number(value).toFixed(unit === "×" ? 1 : 0)}
+          {Number(value).toFixed(unit === "°" ? 0 : unit === "×" ? 1 : 2)}
           {unit}
         </output>
       </span>

@@ -205,7 +205,7 @@ test("mouse drag rotates, wheel zooms, and the instrument can be dragged", async
     .click();
   await expect
     .poll(async () => (await session()).rotation)
-    .toEqual({ yaw: 0, pitch: 0 });
+    .toEqual({ yaw: 0, pitch: 0, roll: 0 });
   await expect.poll(async () => (await session()).zoom).toBe(1);
   await page.getByLabel("3D tooth viewer", { exact: true }).focus();
   await page.getByLabel("3D tooth viewer", { exact: true }).press("ArrowRight");
