@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -26,11 +26,18 @@ test("manual learning flow saves a reflection and switches context without shari
   await page.getByRole("button", { name: "Preferences", exact: true }).click();
   await page.getByLabel("Manual profile preview").selectOption("DV-STUDENT-01");
   const dialog = page.getByRole("dialog");
+  // The server sends the confirmation asynchronously; an immediate isVisible races it.
+  await expect
+    .poll(
+      async () =>
+        (await dialog.isVisible()) ||
+        (await page.locator(".user strong").textContent()) ===
+          "Beginning learner",
+    )
+    .toBeTruthy();
   if (await dialog.isVisible())
     await page.getByRole("button", { name: "Discard & switch" }).click();
-  await expect(
-    page.getByText("Beginning learner", { exact: true }).first(),
-  ).toBeVisible();
+  await expect(page.locator(".user strong")).toHaveText("Beginning learner");
   await page
     .getByRole("button", { name: "Anatomy atlas", exact: true })
     .click();

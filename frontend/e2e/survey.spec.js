@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 test("anonymous survey exports a consented CSV without submitting answers to a server", async ({
   page,
@@ -15,6 +15,8 @@ test("anonymous survey exports a consented CSV without submitting answers to a s
   });
   await submit.click();
   await expect(page.locator("#consent")).not.toBeChecked();
+  // Dismiss the native required-field validation bubble before the next input.
+  await page.keyboard.press("Escape");
   await page.locator("#consent").check();
   await page.locator('[name="role"]').selectOption("student");
   await page.locator('[name="fdi_confidence"]').selectOption("3");

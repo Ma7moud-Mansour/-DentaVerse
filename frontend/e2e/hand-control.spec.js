@@ -1,6 +1,5 @@
-import { test, expect } from "@playwright/test";
-import net from "node:net";
-import { randomUUID } from "node:crypto";
+import { test, expect } from "./fixtures.js";
+import { Worker } from "node:worker_threads";
 import { readFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -28,95 +27,30 @@ function hand(side = "right", pose = "open", x = 0.7, y = 0.5, roll = 0) {
 }
 
 function syntheticVision() {
-  const socket = net.createConnection({ host: "127.0.0.1", port: 8767 });
-  let buffer = Buffer.alloc(0),
-    session,
-    epoch = 0,
-    timer;
-  let hands = [hand()];
-  const image = {
-    data: readFileSync(
-      new URL("../../tests/fixtures/preview-synthetic.jpg", import.meta.url),
-    ).toString("base64"),
-    width: 320,
-    height: 180,
-  };
-  const write = (data) => {
-    const body = Buffer.from(JSON.stringify(data)),
-      header = Buffer.alloc(4);
-    header.writeUInt32BE(body.length);
-    socket.write(Buffer.concat([header, body]));
-  };
-  const tick = () => {
-    if (session && !socket.destroyed)
-      write({
-        version: 1,
-        source: "vision",
-        type: "POSE_FRAME",
-        event_id: randomUUID(),
-        session_id: session,
-        timestamp: Date.now() / 1000,
-        payload: {
-          landmarks: [],
-          image,
-          hands,
-          hand_tracking: true,
-          control_epoch: epoch,
-        },
-      });
-  };
-  const start = () => {
-    clearInterval(timer);
-    tick();
-    timer = setInterval(tick, 100);
-  };
-  socket.on("data", (data) => {
-    buffer = Buffer.concat([buffer, data]);
-    while (buffer.length >= 4 && buffer.length >= buffer.readUInt32BE(0) + 4) {
-      const length = buffer.readUInt32BE(0),
-        packet = JSON.parse(buffer.subarray(4, length + 4).toString());
-      buffer = buffer.subarray(length + 4);
-      if (packet.type === "welcome") {
-        session = packet.session_id;
-        start();
-      }
-      if (packet.type === "context") {
-        session = packet.session_id;
-        epoch = packet.epoch;
-      }
-      if (packet.type === "command" && packet.command === "shutdown") {
-        clearInterval(timer);
-        socket.end();
-      }
-    }
+  const worker = new Worker(new URL("./synthetic-vision.js", import.meta.url));
+  let session;
+  worker.on("message", (value) => {
+    session = value.session;
   });
-  write({ type: "hello", version: 1, source: "vision" });
+  const send = (command, value) => worker.postMessage({ command, value });
   return {
     get session() {
       return session;
     },
-    set(h) {
-      hands = h;
-      tick();
+    set(value) {
+      send("set", value);
     },
     pause() {
-      clearInterval(timer);
+      send("pause");
     },
-    start,
-    match(payload) {
-      write({
-        version: 1,
-        source: "vision",
-        type: "GESTURE_RECOGNIZED",
-        event_id: randomUUID(),
-        session_id: session,
-        timestamp: Date.now() / 1000,
-        payload: { ...payload, epoch },
-      });
+    start() {
+      send("start");
+    },
+    match(value) {
+      send("match", value);
     },
     close() {
-      clearInterval(timer);
-      socket.destroy();
+      return worker.terminate();
     },
   };
 }
@@ -354,6 +288,6 @@ for i,x in enumerate([.5,.4,.3,.4,.5,.6,.7,.6,.5,.4,.3,.4,.5]):
     } catch {
       /* Retain the original failure trace. */
     }
-    sensor.close();
+    await sensor.close();
   }
 });

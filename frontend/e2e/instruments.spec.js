@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures.js";
 
 test.afterEach(async ({ page }) => {
   const manual = page.getByRole("button", {
