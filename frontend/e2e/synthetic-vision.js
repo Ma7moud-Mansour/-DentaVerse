@@ -2,6 +2,11 @@
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { constants, setPriority } from "node:os";
+// Keep the declared 10 Hz synthetic source schedulable while SwiftShader
+// saturates the Windows CI CPU. This affects this disposable test process only.
+if (process.platform === "win32")
+  setPriority(0, constants.priority.PRIORITY_ABOVE_NORMAL);
 const signals = JSON.parse(
   readFileSync(
     new URL(

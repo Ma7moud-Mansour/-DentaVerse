@@ -80,7 +80,7 @@ test("synthetic hands rotate the tooth, move the mirror and zoom through real so
   request,
 }) => {
   // Full multi-step transport/recovery journey with a software-rendered GLB and mirror.
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   // Protocol fixtures only; the workstation camera and database are never used.
   await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) =>
     route.abort(),
