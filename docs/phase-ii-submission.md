@@ -42,9 +42,14 @@
 ## روابط التسليم
 
 - [GitHub](https://github.com/Ma7moud-Mansour/-DentaVerse)
+- [حزمة التحقق النهائية](https://github.com/Ma7moud-Mansour/-DentaVerse/commit/54624fd81de6e0998f952a1302f54cebe59d3c44)
+- [تشغيل GitHub Actions لمراجعة هذه النسخة](https://github.com/Ma7moud-Mansour/-DentaVerse/actions/runs/41799213617)
+- [نسخة التحقق الأخيرة: استقبال الكاميرا وحدود توقيت الفريم](https://github.com/Ma7moud-Mansour/-DentaVerse/commit/b38a0df661cfe23ed5909c552f43c3364eddb3c6)
 - Figma: غير متوفر بعد.
 - Trello: غير متوفر بعد.
 - سجلات الاختبار والتنفيذ: [PROGRESS.md](../PROGRESS.md).
 - قائمة المراحل: [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md).
 
 توثيق الروابط وتجهيز هذا الملف لا يعلّم المرحلة 10 مكتملة دون الأدلة الحقيقية.
+
+المراجعة النهائية: نجحت 105 اختبارات Python محليًا. على GitHub نجح 104 مع تخطي اختبار OpenCV الاختياري لأن بيئة core لا تثبت مكتبات الكاميرا؛ الاختبار نفسه ناجح محليًا. نجح build الإنتاج وسيناريوهات المتصفح الثمانية في 3.4 دقائق على التشغيل المرتبط أعلاه. تعمل نسخة التطبيق الأخيرة على المنفذ 8000 بالكاميرا وBluetooth ووضع hand والحساسية 0.55 والتلويحة مفعلة. هذه اختبارات برمجية بمصادر صناعية معلنة ومراجعة تشغيل، وليست بيانات بحث أو قياس دقة حركة بشريًا.
