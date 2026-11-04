@@ -1672,6 +1672,23 @@ select {
 .hand-roles span:last-child b {
   color: #875e20;
 }
+.wave-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 10px 0;
+}
+.wave-toggle input {
+  accent-color: #55744b;
+  margin-top: 2px;
+}
+.instrument-boundary {
+  color: #e9c08f;
+  display: block;
+  margin-top: 5px;
+}
 .instrument-grab {
   position: absolute;
   width: 44px;

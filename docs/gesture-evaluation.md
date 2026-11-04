@@ -2,6 +2,8 @@
 
 The repository ships with zero real templates. The vision worker uses MediaPipe Pose wrist trajectories and DollarPy. Synthetic fixtures in tests exercise the algorithm only; they are never installed into the working library.
 
+The automatic open-right-hand wave now uses the real DollarPy matcher with separately **authored reference geometry**. It is ready without shoulder calibration or human captures, cycles instruments once per accepted wave and has temporal/cooldown/context guards. See [wave controls](wave-control.md). This reference does not change the real V/circle/Z library counts and does not establish human recognition accuracy.
+
 ## Collect
 
 1. Obtain permission for anonymous coordinate-path collection. Do not record video or names.

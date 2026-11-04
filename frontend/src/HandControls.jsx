@@ -51,24 +51,31 @@ export default function HandControls({ state, send, blocked }) {
             <b>Right · instrument</b>
             {state.hand_control?.roles?.right || "Open palm to rearm"}
           </span>
+          <small>
+            Left fist: tooth · Right grip/pinch: instrument · Both pinches: zoom
+          </small>
         </div>
       )}
       <details open={!active}>
         <summary>Hand gestures</summary>
         <ul>
           <li>
-            <b>With an instrument:</b> your left hand rotates the tooth; move it
-            closer to the camera to zoom in. Your right hand moves the
-            instrument. Both hands work together, each with its own grip or
-            pinch.
+            <b>Left hand:</b> a fist rotates the tooth. Left-hand depth does not
+            zoom.
           </li>
           <li>
             <b>Instrument XYZ:</b> move right/left, up/down, or toward/away from
             the camera. Turn your right palm to tilt the mirror or explorer.
           </li>
           <li>
-            <b>Hand tool:</b> either hand can grip to rotate. Two pinches and
-            spreading your hands control zoom in this mode only.
+            <b>Change instrument:</b> wave your open right palm quickly side to
+            side, twice. One wave cycles No instrument → Mirror → Explorer → No
+            instrument. Hold still briefly before another wave.
+          </li>
+          <li>
+            <b>Zoom in any tool:</b> pinch with both hands, spread to zoom in,
+            bring them together to zoom out. Tooth and instrument movement stop
+            during zoom. Open both palms before grabbing again.
           </li>
         </ul>
         <small>
@@ -76,6 +83,38 @@ export default function HandControls({ state, send, blocked }) {
           grabbing again. Camera depth is relative, not a physical measurement.
         </small>
       </details>
+      {active && (
+        <label className="wave-toggle">
+          <input
+            type="checkbox"
+            aria-label="Right-hand wave switches instruments"
+            checked={state.session.wave_enabled ?? true}
+            disabled={blocked}
+            onChange={(e) =>
+              send("wave_enabled", { enabled: e.target.checked })
+            }
+          />
+          Right-hand wave switches instruments (DollarPy)
+        </label>
+      )}
+      {active && (
+        <label className="range-label">
+          Movement sensitivity ·{" "}
+          {Math.round((state.session.hand_response ?? 0.55) * 100)}%
+          <input
+            type="range"
+            min="0.25"
+            max="1.25"
+            step="0.05"
+            aria-label="Hand movement sensitivity"
+            value={state.session.hand_response ?? 0.55}
+            disabled={blocked}
+            onChange={(e) =>
+              send("hand_response", { value: Number(e.target.value) })
+            }
+          />
+        </label>
+      )}
     </section>
   );
 }

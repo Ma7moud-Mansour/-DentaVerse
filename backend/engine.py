@@ -16,7 +16,7 @@ def new_session() -> dict:
     return {"id": str(uuid4()), "screen": "studio", "selected_tooth": None, "isolated": False,
         "rotation": {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}, "zoom": 1.0, "layer": "surface", "tool": "hand",
         "tool_position": {"x": 0.7, "y": 0.0, "z": 0.0}, "tool_rotation": {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}, "checkpoints": [], "paused": False,
-        "pause_reason": None, "mode": "manual", "gesture_epoch": 0, "note": "", "saved": False}
+        "pause_reason": None, "mode": "manual", "hand_response": 0.55, "wave_enabled": True, "gesture_epoch": 0, "note": "", "saved": False}
 
 
 def number(value, lower: float, upper: float) -> float:
@@ -40,6 +40,7 @@ class Engine:
         self._hand_dirty = False
         self._last_hand_checkpoint = time.monotonic()
         self._last_pose_event = None
+        self._last_wave = -math.inf
         self.seen: set[str] = set()
         self.order: deque[str] = deque()
         self._restore_workspace()
@@ -67,12 +68,13 @@ class Engine:
                 raise ValueError("Invalid saved screen")
             if s["selected_tooth"] is not None and (type(s["selected_tooth"]) is not int or s["selected_tooth"] != 16):
                 raise ValueError("Invalid saved tooth")
-            if any(type(s[key]) is not bool for key in ["isolated", "paused", "saved"]):
+            if any(type(s[key]) is not bool for key in ["isolated", "paused", "saved", "wave_enabled"]):
                 raise ValueError("Invalid saved state flags")
             if s["isolated"] and s["selected_tooth"] != 16:
                 raise ValueError("Invalid isolated specimen")
             s["rotation"] = {"yaw": number(s["rotation"]["yaw"], -180, 180), "pitch": number(s["rotation"]["pitch"], -80, 80), "roll": number(s["rotation"].get("roll", 0), -180, 180)}
             s["zoom"] = number(s["zoom"], 0.6, 1.8)
+            s["hand_response"] = number(s["hand_response"], .25, 1.25)
             s["tool_position"] = {k: number(s["tool_position"].get(k, 0), -1, 1) for k in ("x", "y", "z")}
             s["tool_rotation"] = {k: number(s["tool_rotation"].get(k, 0), -180, 180) for k in ("yaw", "pitch", "roll")}
             if s["layer"] not in LAYERS or s["tool"] not in {"hand", "mirror", "explorer"} or s["mode"] not in {"manual", "gesture", "hand"}:
@@ -243,7 +245,7 @@ class Engine:
             self.seen.remove(self.order.popleft())
         self.state["events"] = ([{"id": message.event_id, "source": message.source, "type": message.type, "timestamp": message.timestamp}] + self.state["events"])[:20]
         if message.source == "ui" or message.type in {"USER_IDENTIFIED", "GESTURE_RECOGNIZED"}:
-            interrupts = {"navigate", "select_tooth", "isolate", "rotate", "zoom", "layer", "tool", "move_tool", "place_tool", "reset", "set_mode", "pause", "resume", "vision_hand", "vision_calibrate", "vision_start", "vision_stop", "capture_start", "capture_stop", "capture_cancel", "template_record", "new_session", "preview_profile", "confirm_identity"}
+            interrupts = {"navigate", "select_tooth", "isolate", "rotate", "zoom", "layer", "tool", "toggle_tool", "cycle_tool", "move_tool", "place_tool", "reset", "set_mode", "hand_response", "wave_enabled", "pause", "resume", "vision_hand", "vision_calibrate", "vision_start", "vision_stop", "capture_start", "capture_stop", "capture_cancel", "template_record", "new_session", "preview_profile", "confirm_identity"}
             if message.source == "ui" and message.type in interrupts and (self.state["session"]["mode"] == "hand" or previous["session"]["mode"] == "hand"):
                 if self.state["session"]["gesture_epoch"] == previous["session"]["gesture_epoch"]:
                     self.state["session"]["gesture_epoch"] += 1
@@ -254,7 +256,7 @@ class Engine:
 
     def _action(self, action: str, payload: dict):
         s = self.state["session"]
-        manipulation = {"select_tooth", "isolate", "rotate", "zoom", "layer", "tool", "move_tool", "place_tool"}
+        manipulation = {"select_tooth", "isolate", "rotate", "zoom", "layer", "tool", "toggle_tool", "cycle_tool", "move_tool", "place_tool"}
         if action in manipulation and s["paused"]:
             raise ValueError("Resume the retained scene before manipulating it")
         if action == "navigate":
@@ -271,7 +273,7 @@ class Engine:
                 raise ValueError("Select tooth 16 first")
             s.update(isolated=True, screen="workbench", saved=False)
             self._checkpoint("located")
-        elif action in {"rotate", "zoom", "layer", "tool", "move_tool", "place_tool"}:
+        elif action in {"rotate", "zoom", "layer", "tool", "toggle_tool", "cycle_tool", "move_tool", "place_tool"}:
             if not s["isolated"]:
                 raise ValueError("Isolate the specimen first")
             if action == "rotate":
@@ -284,10 +286,13 @@ class Engine:
                 if payload.get("layer") not in LAYERS:
                     raise ValueError("Unknown tissue layer")
                 s["layer"] = payload["layer"]
-            elif action == "tool":
+            elif action == "cycle_tool":
+                tools=("hand","mirror","explorer")
+                s["tool"]=tools[(tools.index(s["tool"])+1)%len(tools)]
+            elif action in {"tool", "toggle_tool"}:
                 if payload.get("tool") not in {"hand", "mirror", "explorer"}:
                     raise ValueError("Unknown tool")
-                s["tool"] = payload["tool"]
+                s["tool"] = "hand" if action == "toggle_tool" and s["tool"] == payload["tool"] else payload["tool"]
             elif action == "move_tool":
                 if s["tool"] == "hand":
                     raise ValueError("Choose an instrument first")
@@ -299,6 +304,12 @@ class Engine:
                     raise ValueError("The activity asks you to place the mirror")
                 self._checkpoint("mirror_placed")
             s["saved"] = False
+        elif action == "hand_response":
+            s["hand_response"] = number(payload.get("value"), .25, 1.25)
+        elif action == "wave_enabled":
+            if type(payload.get("enabled")) is not bool:
+                raise ValueError("Choose whether automatic wave control is enabled")
+            s["wave_enabled"] = payload["enabled"]
         elif action == "reset":
             if payload.get("confirm") is not True:
                 raise ValueError("Confirm before resetting the view")
@@ -436,6 +447,23 @@ class Engine:
         elif kind == "GESTURE_RECOGNIZED":
             if p.get("epoch") != s["gesture_epoch"]:
                 raise ValueError("Gesture capture predates the current control state")
+            if p.get("name") == "wave":
+                if s["mode"] != "hand" or s["paused"] or s["screen"] != "workbench" or not s["isolated"] or not s["wave_enabled"] or not self._hand_camera_ready() or self.state["vision"]["capturing"] or self.state["vision"]["pending_capture"]:
+                    raise ValueError("Automatic wave control is not currently active")
+                score=number(p.get("score"),0,1)
+                if p.get("method") != "DollarPy" or p.get("template_origin") != "authored_reference" or score<.82:
+                    raise ValueError("Wave needs an accepted DollarPy classification")
+                right=next((h for h in self.state["vision"]["pose"]["hands"] if h["id"] == "right"),None)
+                if not right or not right["in_frame"] or right["gesture"] != "open_palm" or right["extended_fingers"]<4 or right["pinch_ratio"]<=.6:
+                    raise ValueError("Show an open right palm for wave control")
+                if time.monotonic()-self._last_wave<1.8:
+                    raise ValueError("Finish the current wave before switching again")
+                self._action("cycle_tool",{})
+                s["gesture_epoch"]+=1
+                self._reset_hand_control("waiting","Tool changed by wave · open palms before grabbing")
+                self._last_wave=time.monotonic()
+                self.state["last_gesture"]={"name":"wave","score":score,"reason":None}
+                return
             if s["mode"] != "gesture" or s["paused"] or self.state["tracking"] != "ready" or not self.state["vision"]["calibrated"]:
                 raise ValueError("Gesture control is not currently active")
             name = p.get("name")

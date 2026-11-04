@@ -24,3 +24,7 @@ Use an anonymous response code. Record only the information needed for analysis.
 After using the actual interface, rate 1 Strongly disagree to 5 Strongly agree: I knew what to do; I could identify the selected tooth; I knew which object would move; recovery was clear; I could pause/resume; I would use this tool to support anatomy learning. Ask: What was the most confusing moment, and why?
 
 Keep pre-task preferences separate from post-task observations. Record whether a session used actual sensors or manual/simulated input.
+
+## Ready-to-use local form
+
+Open http://127.0.0.1:8000/research/survey.html after building the frontend. The anonymous form follows these 12 pre-task questions, requires consent, permits missing answers and downloads a CSV without uploading or retaining responses. Explain actual retention/deletion arrangements before inviting consent. Multi-select values use semicolons. `consented=yes` is required by `tools/analyze_survey.py`; the empty response template is not research data. Store actual files in ignored `data/research/`, then follow [the submission guide](../phase-ii-submission.md). The report aggregates actual supplied rows and leaves qualitative interpretation and design decisions for genuine critical analysis.

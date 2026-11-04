@@ -1,5 +1,7 @@
 # BLE peripheral setup and live verification
 
+For the available Android phone, follow the [Arabic nRF Connect setup guide](android-ble-setup.md).
+
 The worker starts without scanning. Click Discover devices in Session setup or Preferences to scan only for the DentaVerse service. A laptop Bluetooth adapter and a peripheral capable of advertising a custom BLE GATT service are required. A compatible phone GATT-server app or an available development board may be used; ordinary phone Bluetooth visibility alone does not expose the required characteristic.
 
 | Property | Value |

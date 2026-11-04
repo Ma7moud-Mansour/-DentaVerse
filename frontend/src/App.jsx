@@ -409,7 +409,7 @@ export default function App() {
                 <button
                   title="Select mirror"
                   aria-label="Select mirror"
-                  onClick={() => send("tool", { tool: "mirror" })}
+                  onClick={() => send("toggle_tool", { tool: "mirror" })}
                   disabled={sceneBlocked || !s.isolated}
                 >
                   <Search size={21} />
@@ -570,6 +570,37 @@ export default function App() {
                 </div>
                 <div className="inspector-section">
                   <Eyebrow>Instrument tray</Eyebrow>
+                  <div
+                    className="segment"
+                    role="group"
+                    aria-label="Instrument shortcuts"
+                  >
+                    {TOOLS.filter(([id]) => id !== "hand").map(
+                      ([id, label]) => (
+                        <button
+                          key={id}
+                          aria-label={`Toggle ${label}`}
+                          aria-pressed={s.tool === id}
+                          className={s.tool === id ? "selected" : ""}
+                          disabled={sceneBlocked || !s.isolated}
+                          onClick={() => send("toggle_tool", { tool: id })}
+                        >
+                          {label}
+                          {s.tool === id ? " · remove" : ""}
+                        </button>
+                      ),
+                    )}
+                    <button
+                      disabled={sceneBlocked || !s.isolated}
+                      onClick={() => send("cycle_tool")}
+                      aria-label="Next instrument"
+                    >
+                      Next instrument
+                    </button>
+                  </div>
+                  <p className="muted">
+                    Click the selected instrument again to remove it.
+                  </p>
                   <label className="field-label">
                     Active tool
                     <select
@@ -868,6 +899,11 @@ export default function App() {
               <div className="gesture-grid">
                 {[
                   [
+                    "↔",
+                    "Switch instruments with a wave",
+                    "In Live hand controls, wave your open right palm quickly side to side twice. No instrument → Mirror → Explorer → No instrument. Hold still briefly before another wave.",
+                  ],
+                  [
                     "V",
                     "Confirm your selection",
                     "Select tooth 16, then draw a V to isolate it. With the mirror active, V confirms its placement.",
@@ -893,9 +929,10 @@ export default function App() {
               <div className="notice">
                 <CircleHelp size={22} />
                 <p>
-                  These gestures are matched using saved geometric templates.
-                  Collect your real templates in Preferences before using them.
-                  Direction alone does not distinguish a gesture.
+                  DollarPy matches movement paths. The right-hand wave is ready
+                  in Live hand controls. V, circle and Z use your recorded
+                  templates: collect them in Preferences before using Camera
+                  gestures. Direction alone does not distinguish a gesture.
                 </p>
               </div>
               <Button onClick={() => go(s.isolated ? "workbench" : "setup")}>

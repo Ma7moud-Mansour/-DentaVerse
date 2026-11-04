@@ -8,6 +8,7 @@ import {
   visibleSurfacePlacement,
   TOOL_SCALE,
   TOOL_DEPTH,
+  constrainInstrument,
 } from "./instruments";
 
 const MODEL_URL = "/models/maxillary-first-molar-left.glb";
@@ -117,6 +118,7 @@ export default function Specimen({
   const instrumentHandle = useRef(null);
   const [probe, setProbe] = useState("away");
   const [marked, setMarked] = useState(0);
+  const [boundary, setBoundary] = useState(false);
   const mount = useRef(null),
     sceneRef = useRef(null);
   const latest = useRef({ session, disabled, suspended, onAction });
@@ -200,6 +202,18 @@ export default function Specimen({
       view.ready &&
       Boolean(latest.current.onAction);
     const draw = () => {
+      if (view.ready) {
+        const blocked = constrainInstrument(
+          tooth,
+          tool,
+          latest.current.session?.tool ?? "hand",
+        );
+        setBoundary((old) => (old === blocked ? old : blocked));
+        host.parentElement.dataset.instrumentBoundary = String(blocked);
+        host.parentElement.dataset.instrumentClearance = String(
+          tool.userData.clearance ?? 0,
+        );
+      }
       scene.updateMatrixWorld(true);
       if (
         view.ready &&
@@ -254,6 +268,7 @@ export default function Specimen({
           ((target[key] || 0) - (view.displayedTool[key] || 0)) * alpha;
       }
       const t = view.displayedTool;
+      if (!moving && alpha !== 1) return false;
       positionInstrument(
         tool,
         latest.current.session?.tool ?? "hand",
@@ -671,6 +686,11 @@ export default function Specimen({
               ? "Move XYZ and tilt your right palm to change the reflected view."
               : "The contact marker follows the visible mesh. No force or clinical score is measured."}
           </span>
+          {boundary && (
+            <small className="instrument-boundary" role="status">
+              Surface boundary reached · move around the tooth
+            </small>
+          )}
           {session?.tool === "explorer" && (
             <div className="instrument-actions">
               {session.mode !== "hand" && (

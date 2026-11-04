@@ -42,6 +42,7 @@ def engine():
     engine.worker_status("vision",True)
     frame(engine,[hand()])
     send(engine,"set_mode",{"mode":"hand"})
+    send(engine,"hand_response",{"value":1})
     yield engine
     store.close()
 
@@ -213,17 +214,27 @@ def test_both_hands_move_independent_targets_in_the_same_frame(engine):
     assert engine.state["hand_control"]["hands"] == ["left","right"]
 
 
-def test_two_pinches_keep_instrument_roles_instead_of_zoom_override(engine):
+def test_two_pinches_override_both_targets_for_span_zoom(engine):
     send(engine,"tool",{"tool":"explorer"})
     frame(engine,[hand("left",x=.3),hand("right")])
-    frame(engine,[hand("left","pinch",x=.3),hand("right","pinch")])
-    frame(engine,[hand("left","pinch",x=.2),hand("right","pinch",x=.8)])
-    assert engine.state["session"]["rotation"]["yaw"] < -35
-    assert engine.state["session"]["tool_position"]["x"] > .95
-    assert engine.state["session"]["zoom"] == 1
+    frame(engine,[hand("left","fist",x=.3),hand("right","pinch")])
+    frame(engine,[hand("left","fist",x=.35),hand("right","pinch",x=.75)])
+    retained=copy.deepcopy(engine.state["session"])
+    frame(engine,[hand("left","pinch",x=.35),hand("right","pinch",x=.75)])
+    assert engine.state["hand_control"]["phase"] == "zooming"
+    frame(engine,[hand("left","pinch",x=.2),hand("right","pinch",x=.9)])
+    assert engine.state["session"]["zoom"] > 1.6
+    assert engine.state["session"]["rotation"] == retained["rotation"]
+    assert engine.state["session"]["tool_position"] == retained["tool_position"]
+    frame(engine,[hand("left","pinch",x=.4),hand("right","pinch",x=.6)])
+    assert engine.state["session"]["zoom"] < .7
+    frame(engine,[hand("left",x=.4),hand("right","pinch",x=.6)])
+    frame(engine,[hand("left",x=.4),hand("right","pinch",x=.8)])
+    assert engine.state["session"]["tool_position"] == retained["tool_position"]
+    assert engine.state["hand_control"]["phase"] == "release"
 
 
-def test_depth_drives_left_zoom_and_right_xyz_independently(engine):
+def test_left_depth_never_zooms_while_right_depth_moves_instrument(engine):
     send(engine,"tool",{"tool":"mirror"})
     left, right = hand("left",x=.3), hand("right")
     frame(engine,[left,right])
@@ -232,8 +243,30 @@ def test_depth_drives_left_zoom_and_right_xyz_independently(engine):
     frame(engine,[left,right])
     left["palm_span"],right["palm_span"] = .18,.08
     frame(engine,[left,right])
-    assert engine.state["session"]["zoom"] > 1.4
+    assert engine.state["session"]["zoom"] == 1
     assert engine.state["session"]["tool_position"]["z"] < -.5
+
+
+def test_left_pinch_alone_does_not_zoom_or_rotate(engine):
+    send(engine,"tool",{"tool":"mirror"})
+    frame(engine,[hand("left",x=.3)])
+    frame(engine,[hand("left","pinch",x=.3)])
+    frame(engine,[hand("left","pinch",x=.4,y=.35,roll=25)])
+    assert engine.state["session"]["zoom"] == 1
+    assert engine.state["session"]["rotation"] == {"yaw":0,"pitch":0,"roll":0}
+
+
+def test_calm_sensitivity_reduces_gain_and_changes_require_rearm(engine):
+    assert Engine(Store(":memory:")).state["session"]["hand_response"] == .55
+    send(engine,"hand_response",{"value":.5})
+    frame(engine,[hand()]);frame(engine,[hand(pose="fist")]);frame(engine,[hand(pose="fist",x=.8)])
+    assert 18 < engine.state["session"]["rotation"]["yaw"] < 23
+    before=copy.deepcopy(engine.state["session"]["rotation"])
+    send(engine,"hand_response",{"value":.25})
+    frame(engine,[hand(pose="fist",x=.9)])
+    assert engine.state["session"]["rotation"] == before
+    assert Engine(engine.store).state["session"]["hand_response"] == .25
+    with pytest.raises(ValueError):send(engine,"hand_response",{"value":0})
 
 
 def test_losing_right_hand_does_not_stop_left_and_reentry_needs_release(engine):

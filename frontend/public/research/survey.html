@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DentaVerse — استبيان تجربة التعلّم</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f2ec;color:#1d302c;font:16px/1.8 Arial,sans-serif}main{max-width:760px;margin:auto;padding:32px 20px}h1{line-height:1.4}header,fieldset{background:#fcfcf8;border:1px solid #dedfd5;border-radius:12px;padding:24px;margin:18px 0}legend{font-weight:bold;padding:0 8px}label{display:block;margin:8px 0}input[type=checkbox],input[type=radio]{margin-left:8px;accent-color:#496b4c}select,textarea{font:inherit;width:100%;padding:10px;border:1px solid #899b87;border-radius:5px;background:white}textarea{min-height:100px}button{font:inherit;padding:12px 20px;border:1px solid #496b4c;border-radius:6px;background:#dbeeab;color:#1d302c;cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #507c9a;outline-offset:3px}.muted{color:#536555;font-size:14px}.buttons{display:flex;gap:12px;flex-wrap:wrap}.notice{border-right:4px solid #496b4c;padding:0 14px}#result{font-weight:bold}a{color:#25536a}
+</style>
+<main>
+<header><strong lang="en">DentaVerse / HCI Phase II</strong><h1>إيه اللي يساعدك تتعلّم تشريح الأسنان؟</h1>
+<p>الاستبيان ده لتطوير مشروع تعليمي، والمشاركة اختيارية. ممكن تسيب أي سؤال أو تقفل الصفحة. ما تكتبش اسمك أو رقمك الجامعي أو بيانات مرضى أو أي معلومات تعرّف بشخص.</p>
+<p class="notice">الإجابات بتفضل في الصفحة لحد ما تختار تنزيل CSV؛ الصفحة ما بتبعتهاش لخادم ولا بتحفظها في المتصفح. التنزيل بيعمل ملف على جهازك برمز عشوائي. تسليم الملف للباحث اختياري، ولازم يوضح لك قبل جمعه مين هيحتفظ بيه ولمدة قد إيه وإزاي تطلب حذفه بالرمز.</p>
+<p class="muted">الأسئلة عن تفضيلاتك؛ الإجابات مش اختبار معلومات أو دليل على تحسّن التعلّم. لو جرّبت المشروع، الباحث يسجّل تجربة الاستخدام منفصلة.</p>
+</header>
+<form id="survey">
+<fieldset><legend>الموافقة</legend><label><input type="checkbox" id="consent" required>فهمت طريقة حفظ الملف، والباحث وضّح لي ترتيبات الاحتفاظ والحذف، وموافق أشارك بإجابات مجهولة الهوية.</label></fieldset>
+<div id="questions"></div>
+<div class="buttons"><button type="submit">تنزيل إجاباتي CSV</button><button type="reset">بدء إجابة جديدة</button></div>
+<p id="result" role="status"></p>
+</form>
+<p class="muted"><a href="/">رجوع إلى DentaVerse</a> · مفيش ردود تجريبية متعبّية مسبقًا.</p>
+</main>
+<script src="./survey.js" defer></script>
+</html>

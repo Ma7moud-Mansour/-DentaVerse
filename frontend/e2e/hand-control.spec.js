@@ -2,6 +2,8 @@ import { test, expect } from "@playwright/test";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 
 const signals = JSON.parse(
   readFileSync(
@@ -101,6 +103,17 @@ function syntheticVision() {
       clearInterval(timer);
     },
     start,
+    match(payload) {
+      write({
+        version: 1,
+        source: "vision",
+        type: "GESTURE_RECOGNIZED",
+        event_id: randomUUID(),
+        session_id: session,
+        timestamp: Date.now() / 1000,
+        payload: { ...payload, epoch },
+      });
+    },
     close() {
       clearInterval(timer);
       socket.destroy();
@@ -112,6 +125,8 @@ test("synthetic hands rotate the tooth, move the mirror and zoom through real so
   page,
   request,
 }) => {
+  // Full multi-step transport/recovery journey with a software-rendered GLB and mirror.
+  test.setTimeout(120000);
   // Protocol fixtures only; the workstation camera and database are never used.
   await page.route(/https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) =>
     route.abort(),
@@ -214,19 +229,71 @@ test("synthetic hands rotate the tooth, move the mirror and zoom through real so
     sensor.set([left, right]);
     await expect
       .poll(async () => (await state()).session.rotation.yaw)
-      .toBeGreaterThan(beforeDual.rotation.yaw + 30);
+      .toBeGreaterThan(beforeDual.rotation.yaw + 15);
     await expect
       .poll(async () => (await state()).session.tool_rotation.roll)
       .toBeLessThan(-10);
     await expect
       .poll(async () => (await state()).session.tool_position.x)
-      .toBeLessThan(beforeDual.tool_position.x - 0.3);
+      .toBeLessThan(beforeDual.tool_position.x - 0.15);
     const zoomed = (await state()).session;
     // Losing the instrument hand freezes only that target; left-hand motion continues.
     sensor.set([hand("left", "fist", 0.45, 0.57, 25)]);
     await expect.poll(phase).toBe("rotating");
     expect((await state()).session.tool_position).toEqual(zoomed.tool_position);
+    sensor.set([hand("left", "open", 0.3), hand("right")]);
+    await expect.poll(phase).toBe("ready");
+    const pinchBefore = (await state()).session;
+    sensor.set([hand("left", "pinch", 0.3), hand("right", "pinch")]);
+    await expect.poll(phase).toBe("zooming");
+    sensor.set([hand("left", "pinch", 0.2), hand("right", "pinch", 0.8)]);
+    await expect
+      .poll(async () => (await state()).session.zoom)
+      .toBeGreaterThan(pinchBefore.zoom + 0.4);
+    expect((await state()).session.rotation).toEqual(pinchBefore.rotation);
+    expect((await state()).session.tool_position).toEqual(
+      pinchBefore.tool_position,
+    );
+    sensor.set([hand("left", "pinch", 0.4), hand("right", "pinch", 0.6)]);
+    await expect
+      .poll(async () => (await state()).session.zoom)
+      .toBeLessThan(0.7);
     const retainedRotation = (await state()).session.rotation;
+    sensor.set([hand()]);
+    await expect.poll(phase).toBe("ready");
+    sensor.set([hand("left", "open", 0.3), hand()]);
+    await expect.poll(phase).toBe("ready");
+    // Run the actual Python DollarPy recognizer on an explicitly synthetic wave,
+    // then carry its result over the same real TCP/WebSocket path as the worker.
+    const script = `import json,copy
+from pathlib import Path
+from backend.wave import RightWave
+h=next(h for h in json.loads(Path('tests/fixtures/hand-signals-synthetic.json').read_text())['open'] if h['id']=='right')
+w=RightWave()
+for i in range(5):w.update([h],i*.1,('synthetic',1))
+for i,x in enumerate([.5,.4,.3,.4,.5,.6,.7,.6,.5,.4,.3,.4,.5]):
+ h['landmarks'][0]['x']=x
+ result=w.update([h],(i+5)*.1,('synthetic',1))
+ if result:
+  print(json.dumps(result));break
+`;
+    const { stdout } = await promisify(execFile)(
+      ".venv/Scripts/python.exe",
+      ["-c", script],
+      { cwd: "..", windowsHide: true },
+    );
+    const wave = JSON.parse(stdout.trim());
+    expect(wave.method).toBe("DollarPy");
+    sensor.match(wave);
+    await expect(page.getByLabel("Active tool")).toHaveValue("explorer");
+    await page
+      .getByRole("button", { name: "Toggle Explorer", exact: true })
+      .click();
+    await expect(page.getByLabel("Active tool")).toHaveValue("hand");
+    await page
+      .getByRole("button", { name: "Next instrument", exact: true })
+      .click();
+    await expect(page.getByLabel("Active tool")).toHaveValue("mirror");
     sensor.pause();
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(

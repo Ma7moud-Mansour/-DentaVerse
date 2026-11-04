@@ -1,9 +1,124 @@
 import * as THREE from "three";
 import { Reflector } from "three/addons/objects/Reflector.js";
+import { MeshBVH, getTriangleHitPointInfo } from "three-mesh-bvh";
 
 export const TOOL_SCALE = 1.8;
 export const TOOL_DEPTH = 1.6;
 export const TIP = new THREE.Vector3(-0.18, 0.25, 0);
+const EXPLORER_CURVE = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0, -0.1, 0),
+  new THREE.Vector3(0, 0.27, 0),
+  new THREE.Vector3(-0.13, 0.35, 0),
+  TIP.clone(),
+]);
+const SHAFT = Array.from({ length: 9 }, (_, i) => ({
+  point: new THREE.Vector3(0, -0.09 - i * 0.14, 0),
+  radius: 0.085,
+}));
+const MIRROR_BOUNDS = [{ point: new THREE.Vector3(), radius: 0.4 }, ...SHAFT];
+const EXPLORER_BOUNDS = [
+  ...Array.from({ length: 25 }, (_, i) => ({
+    point: EXPLORER_CURVE.getPoint(i / 24),
+    radius: 0.025,
+  })),
+  ...SHAFT,
+];
+
+export function instrumentBounds(kind) {
+  return kind === "mirror" ? MIRROR_BOUNDS : EXPLORER_BOUNDS;
+}
+
+export function nearestSurface(tooth, worldPoint) {
+  let result = null;
+  for (const mesh of visibleSurfaces(tooth)) {
+    const geometry = mesh.geometry;
+    geometry.boundsTree ??= new MeshBVH(geometry, { maxLeafSize: 10 });
+    const local = mesh.worldToLocal(worldPoint.clone());
+    const hit = geometry.boundsTree.closestPointToPoint(local);
+    if (!hit) continue;
+    const info = getTriangleHitPointInfo(hit.point, geometry, hit.faceIndex);
+    const normal = info.face.normal
+      .clone()
+      .applyNormalMatrix(new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld));
+    const point = mesh.localToWorld(hit.point.clone());
+    const delta = worldPoint.clone().sub(point),
+      distance = delta.length();
+    const signed = delta.dot(normal) < 0 ? -distance : distance;
+    const candidate = { point, normal, distance, signed };
+    if (
+      !result ||
+      (signed < 0 && (result.signed >= 0 || signed < result.signed)) ||
+      (signed >= 0 && result.signed >= 0 && distance < result.distance)
+    )
+      result = candidate;
+  }
+  return result;
+}
+
+export function constrainInstrument(tooth, tool, kind) {
+  if (kind === "hand") return false;
+  tooth.updateWorldMatrix(true, true);
+  tool.updateWorldMatrix(true, true);
+  const signature = () =>
+    `${kind}:${visibleSurfaces(tooth)
+      .map((m) => m.uuid)
+      .join(
+        ",",
+      )}:${tooth.matrixWorld.elements.join(",")}:${tool.matrixWorld.elements.join(",")}`;
+  if (tool.userData.boundaryPose === signature())
+    return tool.userData.boundaryBlocked;
+  let blocked = false;
+  let solved = false;
+  for (let iteration = 0; iteration < 48; iteration++) {
+    tool.updateWorldMatrix(true, true);
+    let deepest = 0,
+      correction = null;
+    for (const bound of instrumentBounds(kind)) {
+      const center = tool.localToWorld(bound.point.clone());
+      const hit = nearestSurface(tooth, center);
+      if (!hit) continue;
+      const overlap = bound.radius + 0.003 - hit.signed;
+      if (overlap > deepest) {
+        deepest = overlap;
+        // Nearest-point projection keeps the entire conservative tool volume outside.
+        correction =
+          hit.signed > 1e-6 ? center.sub(hit.point).normalize() : hit.normal;
+      }
+    }
+    if (deepest < 0.0001) {
+      solved = true;
+      break;
+    }
+    blocked = true;
+    tool.position.addScaledVector(correction, Math.min(deepest, 0.45));
+  }
+  // A deterministic outward fallback handles conflicting contacts in tight concavities.
+  if (!solved) {
+    for (let escape = 0; escape < 50; escape++) {
+      tool.position.z += 0.2;
+      tool.updateWorldMatrix(true, true);
+      if (instrumentClearance(tooth, tool, kind) >= 0) {
+        solved = true;
+        break;
+      }
+    }
+  }
+  tool.userData.clearance = instrumentClearance(tooth, tool, kind);
+  tool.updateWorldMatrix(true, true);
+  tool.userData.boundaryPose = signature();
+  tool.userData.boundaryBlocked = blocked;
+  return blocked;
+}
+
+export function instrumentClearance(tooth, tool, kind) {
+  tool.updateWorldMatrix(true, true);
+  return Math.min(
+    ...instrumentBounds(kind).map((b) => {
+      const hit = nearestSurface(tooth, tool.localToWorld(b.point.clone()));
+      return hit ? hit.signed - b.radius : Infinity;
+    }),
+  );
+}
 
 export function buildInstrument() {
   const tool = new THREE.Group();
@@ -32,26 +147,15 @@ export function buildInstrument() {
   const reflector = new Reflector(new THREE.CircleGeometry(0.35, 64), {
     color: 0xe5ece6,
     clipBias: 0.003,
-    textureWidth: 768,
-    textureHeight: 768,
+    textureWidth: 512,
+    textureHeight: 512,
     multisample: 0,
   });
   reflector.position.z = 0.002;
   mirror.add(reflector);
   tool.add(mirror);
   const explorer = new THREE.Mesh(
-    new THREE.TubeGeometry(
-      new THREE.CatmullRomCurve3([
-        new THREE.Vector3(0, -0.1, 0),
-        new THREE.Vector3(0, 0.27, 0),
-        new THREE.Vector3(-0.13, 0.35, 0),
-        TIP.clone(),
-      ]),
-      32,
-      0.014,
-      8,
-      false,
-    ),
+    new THREE.TubeGeometry(EXPLORER_CURVE, 32, 0.014, 8, false),
     metal,
   );
   tool.add(explorer);
@@ -96,21 +200,9 @@ export function visibleSurfaces(tooth) {
 
 export function probeSurface(tooth, tool) {
   const tip = tool.localToWorld(TIP.clone());
-  const center = tooth.getWorldPosition(new THREE.Vector3());
-  const outward = tip.clone().sub(center);
-  const distance = outward.length();
-  if (distance < 0.001) return { kind: "inside", tip };
-  outward.normalize();
-  // A radial approach test on the visible mesh. No clinical force/distance score.
-  const ray = new THREE.Raycaster(
-    center.clone().addScaledVector(outward, 5),
-    outward.clone().negate(),
-    0,
-    10,
-  );
-  const hit = ray.intersectObjects(visibleSurfaces(tooth), false)[0];
+  const hit = nearestSurface(tooth, tip);
   if (!hit) return { kind: "away", tip };
-  const gap = distance - hit.point.distanceTo(center);
+  const gap = hit.signed;
   return {
     kind: Math.abs(gap) < 0.065 ? "contact" : gap < 0 ? "inside" : "away",
     tip,

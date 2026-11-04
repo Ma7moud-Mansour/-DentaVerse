@@ -7,6 +7,8 @@ Gesture-based dental anatomy learning workbench for the HCI Phase II project. Th
 - [Execution checklist in Arabic](IMPLEMENTATION_PLAN.md)
 - [Progress and verification log](PROGRESS.md)
 - [Rubric evidence and outstanding real-world checks](docs/evidence.md)
+- [Phase II submission map and actual remaining evidence](docs/phase-ii-submission.md)
+- [Anonymous survey form](http://127.0.0.1:8000/research/survey.html) and [Android BLE setup](docs/android-ble-setup.md)
 
 Completed code and automated checks do not imply completed participant research, live camera/BLE validation, editable Figma work or anatomical review. The external specimen uses a licensed University of Dundee model, mirrored for the right-sided activity. Internal tissue views remain illustrative. [Model attribution and adaptations](frontend/public/models/ATTRIBUTION.md).
 
@@ -25,7 +27,7 @@ Preferences includes **Manual profile preview** to inspect beginner, experienced
 
 ### Enable the real camera and Bluetooth workers
 
-To control the tooth directly, open a specimen and select **Enable hand controls**. Show an open palm, then grip/pinch and move to rotate. With Mirror/Explorer selected, the left hand rotates/rolls the tooth and uses depth to zoom; the right hand moves the instrument in XYZ and tilts it. Both grips can work simultaneously. With Hand selected, pinch with both hands and change their separation to zoom. The mirror renders an actual scene reflection; Explorer highlights mesh contact and allows temporary surface marks. Open your hand to release. The camera and feedback appear beside the tooth; mouse transforms are disabled until **Use mouse & keyboard** is selected. [Control guide and verification](docs/hand-controls.md).
+To control the tooth directly, open a specimen and select **Enable hand controls**. Show an open palm, then grip/pinch and move to rotate. With Mirror/Explorer selected, a left fist rotates/rolls the tooth; left-hand depth does not zoom; the right hand moves the instrument in XYZ and tilts it. Both grips can work simultaneously. In every tool mode, pinch with both hands and spread to zoom in or bring them together to zoom out; this suspends both object grabs. The mirror renders an actual scene reflection; surface constraints keep instruments outside the visible tooth. Explorer highlights mesh contact and allows temporary surface marks. Movement sensitivity starts at a calmer 55% and is adjustable. Wave the open right palm side to side twice to cycle No instrument → Mirror → Explorer → No instrument through DollarPy; the selected tool button also removes that instrument. [Wave guide and reference provenance](docs/wave-control.md). Open your hand to release. The camera and feedback appear beside the tooth; mouse transforms are disabled until **Use mouse & keyboard** is selected. [Control guide and verification](docs/hand-controls.md).
 
 The camera tracks both hands and all fingers using a separate Hand Landmarker: **21 points per hand**, left/right colors, open-palm/fist/pinch readouts and palm roll. Hands is the default overlay; select Body or Both for the required Pose skeleton. Hand signals appear without shoulder calibration. [Hand tracking and programmable signals](docs/hand-tracking.md). Recorded DollarPy wrist paths retain their separate calibration and command flow.
 

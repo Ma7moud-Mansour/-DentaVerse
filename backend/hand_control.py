@@ -39,6 +39,7 @@ class HandControl:
         self.needs_release = True
         self.release_all = require_all
         self.dual_anchors = {}
+        self.zoom_anchor = None
 
     @staticmethod
     def feedback(phase, message, hands=()):
@@ -56,6 +57,33 @@ class HandControl:
             self.context = context
         visible = {h["id"]: h for h in hands if h["in_frame"] and h["gesture"] not in {"partial", "stabilizing"}}
         self.armed.intersection_update(visible)
+        def opened(h):
+            return h["gesture"] in {"open_palm", "neutral"} and h["extended_fingers"] >= 3 and h["pinch_ratio"] > .6
+        def pinched(h):
+            return h["gesture"] == "pinch" and h["pinch_ratio"] <= .42
+        self.armed.update(side for side,h in visible.items() if opened(h))
+        if self.release_all:
+            if any(not opened(h) for h in visible.values()):
+                return [], self.feedback("release", "Open both palms after zooming before grabbing again")
+            self.release_all = False
+        zooming = all(side in visible and side in self.armed and pinched(visible[side]) for side in ("left","right"))
+        if self.zoom_anchor and not zooming:
+            self.reset(require_all=True)
+            self.context=context
+            return [], self.feedback("release", "Open both palms after zooming before grabbing again")
+        if zooming:
+            a,b = visible["left"]["center"],visible["right"]["center"]
+            span = math.hypot((a["x"]-b["x"])*aspect,a["y"]-b["y"])
+            if span < .10:
+                self.reset(require_all=True); self.context=context
+                return [], self.feedback("release", "Separate your hands, then open both palms")
+            if self.zoom_anchor is None:
+                self.zoom_anchor={"span":span,"zoom":session["zoom"]}
+                self.dual_anchors.clear()
+                return [], self.feedback("zooming","Both pinches grabbed · spread to zoom in, bring together to zoom out",("left","right"))
+            value=clamp(self.zoom_anchor["zoom"]*(1+deadzone(span/self.zoom_anchor["span"]-1,.015)),.6,1.8)
+            return [("zoom",{"value":value})], self.feedback("zooming","Spread hands to zoom in · bring together to zoom out",("left","right"))
+        gain=session.get("hand_response",.55)
         actions, active, states = [], [], {}
         for side in ("left", "right"):
             h = visible.get(side)
@@ -75,11 +103,22 @@ class HandControl:
                     self.armed.discard(side)
                 states[side] = "Open palm to rearm"
                 continue
+            if side == "left" and pinched(h):
+                self.dual_anchors.pop(side,None)
+                states[side]="Pinch with the right hand too to zoom"
+                continue
             active.append(side)
-            states[side] = "Tooth · rotate / depth zoom" if side == "left" else "Instrument · move XYZ / tilt"
+            mode = "rotate" if side == "left" else "move_tool"
+            states[side] = "Tooth · fist to rotate" if side == "left" else "Instrument · move XYZ / tilt"
             anchor = self.dual_anchors.get(side)
+            if anchor and anchor["mode"] != mode:
+                self.dual_anchors.pop(side)
+                self.armed.discard(side)
+                active.remove(side)
+                states[side] = "Open palm before changing gesture"
+                continue
             if anchor is None:
-                self.dual_anchors[side] = {"center": dict(h["center"]), "span": palm_span(h,aspect),
+                self.dual_anchors[side] = {"mode": mode, "center": dict(h["center"]), "span": palm_span(h,aspect),
                     "rotation": dict(session["rotation"]), "zoom": session["zoom"],
                     "position": dict(session["tool_position"]), "tool_rotation": dict(session["tool_rotation"]),
                     "tilt": palm_tilt(h,aspect), "last_roll": h["roll"], "roll": 0.0}
@@ -91,15 +130,14 @@ class HandControl:
             anchor["last_roll"] = h["roll"]
             if side == "left":
                 r = anchor["rotation"]
-                actions.append(("rotate", {"yaw": clamp(r["yaw"]+dx*420,-180,180), "pitch": clamp(r["pitch"]+dy*300,-80,80),
-                    "roll": clamp(r["roll"]+deadzone(anchor["roll"],1)*.9,-180,180)}))
-                actions.append(("zoom", {"value": clamp(anchor["zoom"]*math.exp(depth*1.15),.6,1.8)}))
+                actions.append(("rotate", {"yaw": clamp(r["yaw"]+dx*420*gain,-180,180), "pitch": clamp(r["pitch"]+dy*300*gain,-80,80),
+                    "roll": clamp(r["roll"]+deadzone(anchor["roll"],1)*.9*gain,-180,180)}))
             else:
                 p, r, tilt = anchor["position"], anchor["tool_rotation"], palm_tilt(h,aspect)
-                actions.append(("move_tool", {"x": clamp(p["x"]+dx*4.2,-1,1), "y": clamp(p["y"]-dy*4.2,-1,1), "z": clamp(p["z"]+depth*1.8,-1,1),
-                    "yaw": clamp(r["yaw"]+deadzone(tilt["yaw"]-anchor["tilt"]["yaw"],2)*.65,-80,80),
-                    "pitch": clamp(r["pitch"]+deadzone(tilt["pitch"]-anchor["tilt"]["pitch"],2)*.65,-80,80),
-                    "roll": clamp(r["roll"]+deadzone(anchor["roll"],1),-180,180)}))
+                actions.append(("move_tool", {"x": clamp(p["x"]+dx*4.2*gain,-1,1), "y": clamp(p["y"]-dy*4.2*gain,-1,1), "z": clamp(p["z"]+depth*1.8*gain,-1,1),
+                    "yaw": clamp(r["yaw"]+deadzone(tilt["yaw"]-anchor["tilt"]["yaw"],2)*.65*gain,-80,80),
+                    "pitch": clamp(r["pitch"]+deadzone(tilt["pitch"]-anchor["tilt"]["pitch"],2)*.65*gain,-80,80),
+                    "roll": clamp(r["roll"]+deadzone(anchor["roll"],1)*gain,-180,180)}))
         phase = "bimanual" if len(active) == 2 else "rotating" if active == ["left"] else "moving_tool" if active else "ready" if self.armed else "release" if visible else "waiting"
         feedback = self.feedback(phase, "Left: tooth · Right: instrument · open to release" if active else "Open palms · left controls tooth, right controls instrument", active)
         feedback["roles"] = states
@@ -188,7 +226,8 @@ class HandControl:
             return ("move_tool", payload), self.feedback("moving_tool", "Moving instrument · release the pinch to stop", owners)
         anchor["roll"] += (hand["roll"] - anchor["last_roll"] + 180) % 360 - 180
         anchor["last_roll"] = hand["roll"]
-        payload = {"yaw": clamp(anchor["rotation"]["yaw"] + dx * 420, -180, 180),
-            "pitch": clamp(anchor["rotation"]["pitch"] + dy * 300, -80, 80),
-            "roll": clamp(anchor["rotation"]["roll"] + deadzone(anchor["roll"], 1)*.9, -180, 180)}
+        gain=session.get("hand_response",.55)
+        payload = {"yaw": clamp(anchor["rotation"]["yaw"] + dx * 420*gain, -180, 180),
+            "pitch": clamp(anchor["rotation"]["pitch"] + dy * 300*gain, -80, 80),
+            "roll": clamp(anchor["rotation"]["roll"] + deadzone(anchor["roll"], 1)*.9*gain, -180, 180)}
         return ("rotate", payload), self.feedback("rotating", "Rotating tooth · open your hand to release", owners)

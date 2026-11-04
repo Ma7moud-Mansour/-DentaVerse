@@ -13,6 +13,7 @@ class WorkerClient:
         self.writer = None
         self.session_id = None
         self.gesture_active = False
+        self.auto_wave = False
         self.epoch = 0
         self.hand = "right"
         self.generation = 0
@@ -65,6 +66,7 @@ class WorkerClient:
                     if msg.get("type") == "context":
                         self.session_id = msg["session_id"]
                         self.gesture_active = msg["gesture_active"]
+                        self.auto_wave = msg.get("auto_wave") is True
                         self.epoch = msg["epoch"]
                         self.hand = msg.get("hand", self.hand)
                     elif msg.get("type") == "command":
@@ -84,6 +86,7 @@ class WorkerClient:
                 self.connected.clear()
                 self.session_id = None
                 self.gesture_active = False
+                self.auto_wave = False
                 for future in list(self.pending.values()):
                     if not future.done():
                         future.set_exception(ConnectionError("Coordinator disconnected before acknowledgement"))

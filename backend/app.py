@@ -90,7 +90,7 @@ class Hub:
                     except Exception:
                         pass
             s = state["session"]
-            context = {"type": "context", "session_id": s["id"], "gesture_active": s["mode"] == "gesture" and not s["paused"], "epoch": s["gesture_epoch"], "hand": state["vision"]["dominant_hand"]}
+            context = {"type": "context", "session_id": s["id"], "gesture_active": s["mode"] == "gesture" and not s["paused"], "epoch": s["gesture_epoch"], "hand": state["vision"]["dominant_hand"], "auto_wave": s["mode"] == "hand" and s["wave_enabled"] and not s["paused"] and s["screen"] == "workbench" and s["isolated"]}
             for source, writer in list(self.workers.items()):
                 try:
                     await write_frame(writer, context)

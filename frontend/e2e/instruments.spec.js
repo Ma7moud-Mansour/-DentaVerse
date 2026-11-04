@@ -24,6 +24,8 @@ test("the mirror renders scene pixels and the explorer detects actual mesh conta
       probeSurface,
       visibleSurfacePlacement,
       TIP,
+      constrainInstrument,
+      instrumentClearance,
     } = await import("/src/instruments.js");
     const renderer = new THREE.WebGLRenderer();
     renderer.setSize(160, 160);
@@ -77,6 +79,24 @@ test("the mirror renders scene pixels and the explorer detects actual mesh conta
     tool.position.multiplyScalar(0.1);
     scene.updateMatrixWorld(true);
     const inside = probeSurface(tooth, tool).kind;
+    const clearances = [];
+    for (const kind of ["mirror", "explorer"]) {
+      for (const z of [-0.6, 0, 0.6]) {
+        for (const x of [-0.3, 0, 0.3]) {
+          positionInstrument(
+            tool,
+            kind,
+            { x, y: 0.2, z },
+            { yaw: 25, pitch: -15, roll: 30 },
+            camera,
+          );
+          tooth.rotation.set(0.2, 0.5, 0.3);
+          scene.updateMatrixWorld(true);
+          constrainInstrument(tooth, tool, kind);
+          clearances.push(instrumentClearance(tooth, tool, kind));
+        }
+      }
+    }
     reflector.dispose();
     scene.traverse((o) => {
       o.geometry?.dispose();
@@ -90,6 +110,7 @@ test("the mirror renders scene pixels and the explorer detects actual mesh conta
       contact: touched.kind,
       point: touched.point.toArray(),
       inside,
+      clearances,
     };
   });
   expect(result.reflected).toBeGreaterThan(100);
@@ -97,6 +118,7 @@ test("the mirror renders scene pixels and the explorer detects actual mesh conta
   expect(result.before).toBe("away");
   expect(result.contact).toBe("contact");
   expect(result.inside).toBe("inside");
+  expect(Math.min(...result.clearances)).toBeGreaterThanOrEqual(-0.0001);
 });
 
 test("instrument depth, orientation and surface marks work in the student workspace", async ({
@@ -151,7 +173,30 @@ test("instrument depth, orientation and surface marks work in the student worksp
     path: "../.review/ui/live-mirror.png",
     fullPage: true,
   });
+  await setRange("Tool horizontal position", 0);
+  await setRange("Tool depth", -0.4);
+  const rendered = page.locator(".specimen-stage .specimen");
+  await expect(rendered).toHaveAttribute("data-instrument-boundary", "true");
+  await expect
+    .poll(async () =>
+      Number(await rendered.getAttribute("data-instrument-clearance")),
+    )
+    .toBeGreaterThanOrEqual(-0.0001);
+  await setRange("Turn specimen", 60);
+  await setRange("Tilt specimen", 25);
+  await expect
+    .poll(async () =>
+      Number(await rendered.getAttribute("data-instrument-clearance")),
+    )
+    .toBeGreaterThanOrEqual(-0.0001);
+  await page.screenshot({
+    path: "../.review/ui/mirror-boundary.png",
+    fullPage: true,
+  });
+  await setRange("Turn specimen", 0);
+  await setRange("Tilt specimen", 0);
   await page.getByLabel("Active tool").selectOption("explorer");
+  await setRange("Tool depth", 0.2);
   await setRange("Tool horizontal position", 0.1);
   await setRange("Tool vertical position", 0);
   await setRange("Tool tilt horizontal", 0);

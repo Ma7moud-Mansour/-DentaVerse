@@ -16,6 +16,7 @@ data/*.db-*
 data/exports/
 data/recordings/
 data/templates/
+data/research/
 models/*.task
 models/*.download
 *.log

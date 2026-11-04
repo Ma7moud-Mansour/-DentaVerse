@@ -11,6 +11,7 @@ from backend.hands import HandTracker, CONNECTIONS as HAND_CONNECTIONS
 from backend.pose import PoseTracker
 from backend.preview import encode_camera_image
 from backend.workers.client import WorkerClient
+from backend.wave import RightWave
 
 ROOT = Path(__file__).resolve().parents[2]
 CONNECTIONS = [(11,12),(11,13),(13,15),(12,14),(14,16),(11,23),(12,24),(23,24),(23,25),(25,27),(24,26),(26,28)]
@@ -50,6 +51,7 @@ async def run(args):
     library = GestureLibrary(args.templates, args.threshold)
     tracker, capture = PoseTracker(), Capture()
     hand_tracker = HandTracker()
+    wave = RightWave()
     transport = WorkerClient("vision", args.port)
     network = asyncio.create_task(transport.run())
     cam = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW) if __import__('sys').platform == 'win32' else cv2.VideoCapture(args.camera)
@@ -184,6 +186,8 @@ async def run(args):
                     if now - capture.started > 8 or len(capture.points) >= 1000:
                         capture.clear()
                         await transport.emit("GESTURE_REJECTED", {"reason": "Recording timed out. Draw one shape within eight seconds, then finish.", "score": 0.0})
+                wave_epoch, wave_session = transport.epoch, transport.session_id
+                wave_match=wave.update(hands,now,(wave_session,wave_epoch),enabled=transport.auto_wave and not capture.active)
                 if transport.connected.is_set() and now - last_preview >= 1 / 15:
                     preview = tracker.preview(capture.points, now - capture.started if capture.active else 0)
                     preview["hands"] = hands
@@ -192,6 +196,8 @@ async def run(args):
                     preview["image"] = encode_camera_image(frame, cv2)
                     await transport.emit("POSE_FRAME", preview)
                     last_preview = now
+                if wave_match and transport.connected.is_set():
+                    await transport.emit("GESTURE_RECOGNIZED",{**wave_match,"epoch":wave_epoch},wave_session)
                 if tracker.started is not None or capture.active or now - last_status > 3:
                     await publish_status(now)
 

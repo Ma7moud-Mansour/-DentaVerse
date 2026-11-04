@@ -36,7 +36,7 @@ def content_for(state: dict) -> dict:
     tool = session["tool"]
     tool_help = "Rotate the specimen using the view controls." if tool == "hand" else "Move and tilt the virtual mirror to inspect the live reflected model." if tool == "mirror" else "Bring the explorer tip to the visible surface. A highlight marks contact; blue marks let you compare locations."
     if session["mode"] == "hand":
-        tool_help = "Show an open palm, then grip or pinch to rotate the specimen. Two pinches control zoom." if tool == "hand" else f"Left hand: rotate the tooth and use depth to zoom. Right hand: move the {tool} in XYZ and tilt your palm. Open each hand to release it independently."
+        tool_help = "Show an open palm, then grip or pinch to rotate the specimen. Two pinches control zoom." if tool == "hand" else f"Left fist: rotate the tooth. Right hand: move the {tool} in XYZ and tilt. Both pinches: spread hands to zoom in, bring together to zoom out. Open both palms after zoom. Left-hand depth never zooms."
     return {
         **base,
         "layer_title": layer_title,

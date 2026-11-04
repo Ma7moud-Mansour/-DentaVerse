@@ -42,7 +42,7 @@ The first complete learning activity is: identify tooth 16, inspect its form, ex
 
 ## Deferred scope
 
-Full treatment simulation, diagnosis, scoring clinical performance, recognizing physical dental instruments, a full 3D dentition, cloud accounts, instructor rosters and mobile delivery. The user explicitly expanded scope to both hands and all fingers: dedicated Hand Landmarker, live per-hand pose/motion signals and independent overlays are now required. Live hand scene bindings are implemented. Instrument mode assigns left-hand tooth rotation/roll/depth zoom and right-hand instrument XYZ/orientation, with independent grabs and loss recovery. Physical validation of the full new bimanual journey remains separate. The existing DollarPy vocabulary uses deliberately recorded V, circle and Z paths.
+Full treatment simulation, diagnosis, scoring clinical performance, recognizing physical dental instruments, a full 3D dentition, cloud accounts, instructor rosters and mobile delivery. The user explicitly expanded scope to both hands and all fingers: dedicated Hand Landmarker, live per-hand pose/motion signals and independent overlays are now required. Live hand scene bindings are implemented. Instrument mode assigns left-fist tooth rotation/roll and two-pinch span zoom and right-hand instrument XYZ/orientation, with independent grabs and loss recovery. Physical validation of the full new bimanual journey remains separate. The existing DollarPy vocabulary uses deliberately recorded V, circle and Z paths.
 
 ## Open rubric questions
 

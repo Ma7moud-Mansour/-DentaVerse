@@ -4,7 +4,8 @@
 |---|---|---|
 | External molar surface | University of Dundee, School of Dentistry; CC BY 4.0; original model and pinned redistribution documented in `frontend/public/models/ATTRIBUTION.md` | Licensed educational mesh, re-centered and mirrored at runtime; independent anatomy review pending |
 | Dentin and pulp illustrations | Original runtime illustration in `frontend/src/Specimen.jsx`; scaled external envelope and schematic chamber/canals | Explicitly illustrative; not segmented tissues from the source GLB |
-| Virtual instruments | Original geometry in the same file | Simplified interaction objects, no clinical simulation |
+| Virtual instruments | Original geometry in `frontend/src/instruments.js`; Three.js Reflector for live reflection | Simplified visual tools with conservative surface boundaries, no clinical force simulation |
+| Surface query acceleration | three-mesh-bvh, MIT license | Cached triangle queries for constraints and Explorer feedback; dependency license retained in `docs/third-party/three-mesh-bvh.LICENSE` |
 | Interface icons | lucide-react, ISC license | Installed dependency; preserve its license |
 | Interface fonts | Google Fonts DM Sans and Manrope, SIL Open Font License | Optional remote stylesheet; Arial is offline fallback |
 | MediaPipe Pose Lite model | Google MediaPipe model host, version 1 URL in download tool | Local runtime asset; consult the model card and distribution terms before redistribution |
