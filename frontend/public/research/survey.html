@@ -1,23 +1,169 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DentaVerse — استبيان تجربة التعلّم</title>
-<style>
-*{box-sizing:border-box}body{margin:0;background:#f3f2ec;color:#1d302c;font:16px/1.8 Arial,sans-serif}main{max-width:760px;margin:auto;padding:32px 20px}h1{line-height:1.4}header,fieldset{background:#fcfcf8;border:1px solid #dedfd5;border-radius:12px;padding:24px;margin:18px 0}legend{font-weight:bold;padding:0 8px}label{display:block;margin:8px 0}input[type=checkbox],input[type=radio]{margin-left:8px;accent-color:#496b4c}select,textarea{font:inherit;width:100%;padding:10px;border:1px solid #899b87;border-radius:5px;background:white}textarea{min-height:100px}button{font:inherit;padding:12px 20px;border:1px solid #496b4c;border-radius:6px;background:#dbeeab;color:#1d302c;cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #507c9a;outline-offset:3px}.muted{color:#536555;font-size:14px}.buttons{display:flex;gap:12px;flex-wrap:wrap}.notice{border-right:4px solid #496b4c;padding:0 14px}#result{font-weight:bold}a{color:#25536a}
-</style>
-<main>
-<header><strong lang="en">DentaVerse / HCI Phase II</strong><h1>إيه اللي يساعدك تتعلّم تشريح الأسنان؟</h1>
-<p>الاستبيان ده لتطوير مشروع تعليمي، والمشاركة اختيارية. ممكن تسيب أي سؤال أو تقفل الصفحة. ما تكتبش اسمك أو رقمك الجامعي أو بيانات مرضى أو أي معلومات تعرّف بشخص.</p>
-<p class="notice">الإجابات بتفضل في الصفحة لحد ما تختار تنزيل CSV؛ الصفحة ما بتبعتهاش لخادم ولا بتحفظها في المتصفح. التنزيل بيعمل ملف على جهازك برمز عشوائي. تسليم الملف للباحث اختياري، ولازم يوضح لك قبل جمعه مين هيحتفظ بيه ولمدة قد إيه وإزاي تطلب حذفه بالرمز.</p>
-<p class="muted">الأسئلة عن تفضيلاتك؛ الإجابات مش اختبار معلومات أو دليل على تحسّن التعلّم. لو جرّبت المشروع، الباحث يسجّل تجربة الاستخدام منفصلة.</p>
-</header>
-<form id="survey">
-<fieldset><legend>الموافقة</legend><label><input type="checkbox" id="consent" required>فهمت طريقة حفظ الملف، والباحث وضّح لي ترتيبات الاحتفاظ والحذف، وموافق أشارك بإجابات مجهولة الهوية.</label></fieldset>
-<div id="questions"></div>
-<div class="buttons"><button type="submit">تنزيل إجاباتي CSV</button><button type="reset">بدء إجابة جديدة</button></div>
-<p id="result" role="status"></p>
-</form>
-<p class="muted"><a href="/">رجوع إلى DentaVerse</a> · مفيش ردود تجريبية متعبّية مسبقًا.</p>
-</main>
-<script src="./survey.js" defer></script>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      name="description"
+      content="استبيان احتياجات مستخدمي DentaVerse لتطوير تجربة تعلّم تشريح الأسنان — HCI Phase II."
+    />
+    <title>DentaVerse — استبيان تجربة التعلّم</title>
+    <link rel="stylesheet" href="./survey.css" />
+    <script src="./survey.js" defer></script>
+  </head>
+  <body>
+    <div class="topbar">
+      <a class="brand" href="#top" dir="ltr"
+        ><span class="brand-mark" aria-hidden="true">D</span>DentaVerse<span
+          class="brand-caption"
+          >USER RESEARCH</span
+        ></a
+      ><button class="quiet" id="print" type="button">طباعة / حفظ PDF</button>
+    </div>
+    <main id="top">
+      <header class="hero">
+        <div class="eyebrow" lang="en" dir="ltr">
+          HCI PHASE II · SURVEY &amp; CRITICAL ANALYSIS
+        </div>
+        <h1>إيه اللي يساعدك تتعلّم<br />تشريح الأسنان؟</h1>
+        <p class="lead">
+          شاركنا احتياجاتك علشان نطوّر تجربة <bdi>DentaVerse</bdi> التعليمية.
+        </p>
+        <div class="tags">
+          <span>١٢ سؤالًا</span><span>حوالي ٥ دقائق</span
+          ><span>المشاركة اختيارية</span>
+        </div>
+        <p class="intro">
+          DentaVerse مشروع تعليمي لاستكشاف ضرس ثلاثي الأبعاد، وتدويره، وعرض
+          رسومات توضيحية لطبقاته، واستخدام أدوات افتراضية وحفظ ملاحظات. التحكم
+          متاح بالماوس أو بحركات الإيد باستخدام الكاميرا. الأسئلة دي عن
+          احتياجاتك وتفضيلاتك <strong>قبل تجربة المشروع</strong>؛ مش محتاج تكون
+          جرّبته.
+        </p>
+      </header>
+      <div class="layout">
+        <aside class="sidebar" aria-label="دليل الاستبيان">
+          <div class="side-card">
+            <span class="eyebrow">خطوة نحو تجربة أوضح</span>
+            <h2>رأيك يوجّه التصميم.</h2>
+            <p>مفيش إجابة صح أو غلط. سيب أي سؤال مش حابب تجاوب عليه.</p>
+            <nav aria-label="أقسام الاستبيان">
+              <a href="#section-1"><span>01</span> عنك وطريقة تعلّمك</a
+              ><a href="#section-2"><span>02</span> احتياجاتك وبيئة الاستخدام</a
+              ><a href="#section-3"><span>03</span> التحكم والمساعدة</a>
+            </nav>
+            <div class="completion">
+              <span id="completion-text" role="status"
+                >أجبت عن ٠ من ١٢ سؤالًا</span
+              ><progress
+                id="completion"
+                value="0"
+                max="12"
+                aria-label="عدد الأسئلة المجاب عنها"
+              ></progress
+              ><small>مش لازم تكمّل كل الأسئلة علشان تنزّل إجاباتك.</small>
+            </div>
+          </div>
+          <div class="privacy">
+            <strong>من غير بيانات شخصية</strong>
+            <p>
+              ما تكتبش اسمك أو بريدك أو رقمك الجامعي أو بيانات مرضى. الفورم نفسه
+              ما بيطلبش كاميرا ولا Bluetooth.
+            </p>
+          </div>
+        </aside>
+        <div class="content">
+          <details id="discussion" class="discussion">
+            <summary>دليل العرض في المناقشة</summary>
+            <div class="discussion-body">
+              <p>
+                دي أداة بحث جاهزة لبند
+                <bdi>Survey &amp; Critical Analysis</bdi>؛ النتائج والتحليل
+                يتضافوا بعد جمع ردود حقيقية من طلاب الأسنان أو المعيدين.
+              </p>
+              <dl>
+                <dt>People · الأسئلة ١–٤</dt>
+                <dd>الدور والخبرة: تحديد مستوى الشرح والتوجيه.</dd>
+                <dt>Activities · السؤالان ٥ و١٠</dt>
+                <dd>أولويات التعلّم والمعلومات اللي تفضل ظاهرة.</dd>
+                <dt>Contexts · السؤال ٦</dt>
+                <dd>الجهاز ومكان الدراسة: تخطيط الواجهة وبيئة التجربة.</dd>
+                <dt>Technologies · الأسئلة ٧–٩ و١١</dt>
+                <dd>
+                  عوائق التحكم، البديل اليدوي، التعافي وراحة استخدام الكاميرا.
+                </dd>
+                <dt>تحسين مفتوح · السؤال ١٢</dt>
+                <dd>تجميع الموضوعات المتكررة وربطها بتغييرات التصميم.</dd>
+              </dl>
+              <p>
+                في التحليل: اذكر عدد المشاركين الفعلي وطريقة الوصول ليهم، واحسب
+                كل نسبة من عدد اللي جاوبوا السؤال. الاختيارات المتعددة ممكن
+                مجموعها يتجاوز ١٠٠٪. افصل التفضيلات عن ملاحظات تجربة الاستخدام.
+              </p>
+              <p class="muted">
+                الـrubric ما بيحددش هنا حد أدنى لعدد المشاركين. مفيش نتائج بحث
+                مضافة للفورم.
+              </p>
+            </div>
+          </details>
+          <section class="card consent-card" aria-labelledby="consent-title">
+            <h2 id="consent-title">قبل ما نبدأ</h2>
+            <p>
+              مشاركتك اختيارية وممكن توقف في أي وقت. الإجابات بتفضل في الصفحة
+              فقط لحد ما تختار «تنزيل إجاباتي CSV». مفيش إرسال تلقائي لخادم أو
+              حفظ للإجابات في المتصفح؛ إعادة تحميل الصفحة تمسحها.
+            </p>
+            <p>
+              التنزيل بيعمل ملف على جهازك برمز عشوائي، وتسليمه للباحث اختياري.
+              قبل تسليمه، الباحث يوضّح لك مين هيحتفظ بيه، ولمدة قد إيه، وإزاي
+              تطلب حذفه باستخدام الرمز.
+            </p>
+            <label class="consent"
+              ><input
+                form="survey"
+                type="checkbox"
+                id="consent"
+                name="consent"
+                required
+              />
+              <span
+                >فهمت طريقة التعامل مع الإجابات، ولو هسلّم الملف فالباحث وضّح لي
+                الاحتفاظ والحذف، وموافق أشارك.
+                <small>(الموافقة مطلوبة لتنزيل الإجابة فقط)</small></span
+              ></label
+            >
+          </section>
+          <form id="survey">
+            <div id="questions"></div>
+            <section class="card finish">
+              <span class="eyebrow">شكرًا على وقتك</span>
+              <h2>إجاباتك تساعدنا نختار الخطوة الجاية.</h2>
+              <p>
+                نزّل ملف إجابتك واحتفظ برمزه. لو حابب تشارك في البحث، سلّمه
+                للباحث بالطريقة المتفق عليها.
+              </p>
+              <div class="buttons">
+                <button class="primary" type="submit">تنزيل إجاباتي CSV</button
+                ><button class="quiet" type="reset">بدء إجابة جديدة</button>
+              </div>
+              <p id="result" role="status" tabindex="-1"></p>
+            </section>
+          </form>
+          <noscript
+            ><p class="card">
+              فعّل JavaScript لعرض الأسئلة وتنزيل الإجابات.
+            </p></noscript
+          >
+        </div>
+      </div>
+      <footer>
+        <strong dir="ltr">DentaVerse</strong>
+        <p>استبيان احتياجات المستخدمين · مشروع تعليمي · HCI Phase II</p>
+        <p>
+          الإجابات تعبّر عن التفضيلات، وليست قياسًا لتحسّن التعلّم أو للكفاءة
+          الإكلينيكية.
+        </p>
+      </footer>
+    </main>
+  </body>
 </html>
