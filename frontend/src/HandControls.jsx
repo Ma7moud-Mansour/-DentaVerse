@@ -1,5 +1,17 @@
 import { Camera, Hand, MousePointer2 } from "lucide-react";
 
+const WAVE_MESSAGES = {
+  disabled: "Enable live hand controls and resume to wave.",
+  missing: "Show your right palm to the camera.",
+  partial: "Keep your whole right palm and fingertips in view.",
+  open: "Open your right palm and release the pinch.",
+  ready: "Ready · wave your right palm side to side twice.",
+  tracking: "Reading your wave",
+  cooldown: "Hold your open palm still briefly before the next wave.",
+  matched: "Wave matched · switching instrument.",
+  retry: "Try two clear side-to-side sweeps with your palm open.",
+};
+
 export default function HandControls({ state, send, blocked }) {
   const active = state.session.mode === "hand";
   const camera = state.services?.vision;
@@ -8,6 +20,7 @@ export default function HandControls({ state, send, blocked }) {
     camera?.status === "stopping" ||
     camera?.managed;
   const ready = state.workers.vision && state.vision.pose?.hand_tracking;
+  const wave = state.vision.pose?.wave;
   return (
     <section
       className={`hand-controls ${active ? "hand-controls-active" : ""}`}
@@ -96,6 +109,24 @@ export default function HandControls({ state, send, blocked }) {
           />
           Right-hand wave switches instruments (DollarPy)
         </label>
+      )}
+      {active && state.session.wave_enabled && (
+        <p
+          className="hand-control-feedback"
+          role="status"
+          aria-label="Wave recognition feedback"
+          data-wave-phase={
+            state.session.paused ? "paused" : (wave?.phase ?? "missing")
+          }
+        >
+          DollarPy ·{" "}
+          {state.session.paused
+            ? "Resume the session to wave."
+            : (WAVE_MESSAGES[wave?.phase] ?? "Waiting for the camera update…")}
+          {!state.session.paused &&
+            wave?.phase === "tracking" &&
+            ` · ${wave.turns}/2 direction changes`}
+        </p>
       )}
       {active && (
         <label className="range-label">

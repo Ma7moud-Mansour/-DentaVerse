@@ -190,6 +190,7 @@ async def run(args):
                 wave_match=wave.update(hands,now,(wave_session,wave_epoch),enabled=transport.auto_wave and not capture.active)
                 if transport.connected.is_set() and now - last_preview >= 1 / 15:
                     preview = tracker.preview(capture.points, now - capture.started if capture.active else 0)
+                    preview["wave"] = wave.feedback
                     preview["hands"] = hands
                     preview["hand_tracking"] = True
                     preview["control_epoch"] = transport.epoch

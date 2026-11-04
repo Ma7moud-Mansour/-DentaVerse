@@ -1,6 +1,7 @@
 """Synthetic trajectories exercise DollarPy and auto-wave safety, not human accuracy."""
 import copy
 import json
+import math
 import time
 from pathlib import Path
 from unittest.mock import Mock
@@ -16,7 +17,10 @@ OPEN=json.loads((Path(__file__).parent/"fixtures/hand-signals-synthetic.json").r
 
 def palm(x=.5,y=.5,side="right",gesture="open_palm"):
     h=copy.deepcopy(next(h for h in OPEN if h["id"]==side))
-    h["landmarks"][0].update(x=x,y=y);h["gesture"]=gesture
+    dx,dy=x-h["landmarks"][0]["x"],y-h["landmarks"][0]["y"]
+    for point in h["landmarks"]:point.update(x=point["x"]+dx,y=point["y"]+dy)
+    h["center"]={axis:sum(h["landmarks"][i][axis] for i in (0,5,9,13,17))/5 for axis in ("x","y")}
+    h["gesture"]=gesture
     return h
 
 
@@ -116,3 +120,57 @@ def test_active_tool_toggle_removes_it_and_persists_settings(engine):
     send(engine,"toggle_tool",{"tool":"mirror"});assert engine.state["session"]["tool"]=="mirror"
     send(engine,"toggle_tool",{"tool":"mirror"});assert engine.state["session"]["tool"]=="hand"
     send(engine,"wave_enabled",{"enabled":False});assert not Engine(engine.store).state["session"]["wave_enabled"]
+
+
+@pytest.mark.parametrize("style", ["bent_finger", "sloped", "curved", "small", "pivot", "dropped_frame"])
+def test_natural_palm_paths_reach_actual_dollarpy(style):
+    wave=RightWave();matches=[]
+    path=(.5,.4,.3,.4,.5,.6,.7,.6,.5,.4,.3,.4,.5)
+    for i in range(5):wave.update([palm()],i*.125,("s",1))
+    for i,x in enumerate(path):
+        if style=="small":x=.5+(x-.5)*.3
+        y=.5+(.2*(x-.5) if style=="sloped" else .018*math.sin(i*.7) if style=="curved" else 0)
+        h=palm(x,y)
+        if style=="bent_finger":
+            h["gesture"]="neutral";h["fingers"]["ring"]=False;h["extended_fingers"]=sum(h["fingers"].values())
+        if style=="pivot":h["landmarks"][0].update(x=.5,y=.5)
+        value=wave.update([] if style=="dropped_frame" and i==4 else [h],(i+5)*.125,("s",1))
+        if value:matches.append(value)
+    assert len(matches)==1
+    assert matches[0]["method"]=="DollarPy"
+
+
+def test_jitter_circle_and_immediate_pinch_are_not_waves():
+    for path in [[(.5+.008*math.sin(i),.5) for i in range(25)],
+                 [(.5+.15*math.cos(i*.4),.5+.15*math.sin(i*.4)) for i in range(25)]]:
+        wave=RightWave()
+        assert not any(wave.update([palm(x,y)],i*.1,("s",1)) for i,(x,y) in enumerate(path))
+    wave=RightWave()
+    for i in range(8):wave.update([palm(.5-i*.02)],i*.1,("s",1))
+    h=palm();h["pinch_ratio"]=.3  # Debounced label can still say open.
+    assert wave.update([h],.8,("s",1)) is None
+    assert wave.samples==[] and wave.feedback["phase"]=="open"
+
+
+def test_templates_do_not_grow_across_dollarpy_attempts():
+    wave=RightWave();counts=[len(points) for _,points in wave.references]
+    for i in range(3):
+        wave.latched=False;wave.last_fire=-math.inf;wave.clear()
+        assert perform(wave,start=i*4)
+    assert [len(points) for _,points in wave.references]==counts
+
+
+def test_server_accepts_same_naturally_open_palm_as_worker(engine):
+    h=palm(gesture="neutral");h["fingers"]["ring"]=False;h["extended_fingers"]=sum(h["fingers"].values())
+    preview(engine,[h]);send(engine,"GESTURE_RECOGNIZED",match(engine),"vision")
+    assert engine.state["session"]["tool"]=="mirror"
+
+
+def test_wave_feedback_is_bounded_and_not_saved(engine):
+    payload={"landmarks":[],"hands":[palm()],"hand_tracking":True,"control_epoch":engine.state["session"]["gesture_epoch"],"wave":{"phase":"tracking","turns":1}}
+    send(engine,"POSE_FRAME",payload,"vision")
+    assert engine.snapshot()["vision"]["pose"]["wave"]=={"phase":"tracking","turns":1}
+    for bad in ({"phase":"unknown","turns":0},{"phase":"tracking","turns":50},{"phase":"ready","turns":True}):
+        with pytest.raises(ValueError):send(engine,"POSE_FRAME",{**payload,"wave":bad},"vision")
+    saved=engine.store.load_workspace()
+    assert "pose" not in saved and "wave" not in saved["session"]

@@ -226,7 +226,8 @@ h=next(h for h in json.loads(Path('tests/fixtures/hand-signals-synthetic.json').
 w=RightWave()
 for i in range(5):w.update([h],i*.1,('synthetic',1))
 for i,x in enumerate([.5,.4,.3,.4,.5,.6,.7,.6,.5,.4,.3,.4,.5]):
- h['landmarks'][0]['x']=x
+ dx=x-h['landmarks'][0]['x']
+ for point in h['landmarks']:point['x']+=dx
  result=w.update([h],(i+5)*.1,('synthetic',1))
  if result:
   print(json.dumps(result));break
@@ -240,6 +241,13 @@ for i,x in enumerate([.5,.4,.3,.4,.5,.6,.7,.6,.5,.4,.3,.4,.5]):
     expect(wave.method).toBe("DollarPy");
     sensor.match(wave);
     await expect(page.getByLabel("Active tool")).toHaveValue("explorer");
+    await expect(
+      page.getByRole("status", { name: "Wave recognition feedback" }),
+    ).toContainText("Wave matched");
+    await page.locator(".hand-controls").scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: "../.review/ui/wave-feedback-synthetic.png",
+    });
     await page
       .getByRole("button", { name: "Toggle Explorer", exact: true })
       .click();

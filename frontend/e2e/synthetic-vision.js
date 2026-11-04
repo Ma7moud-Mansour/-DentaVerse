@@ -35,6 +35,7 @@ let buffer = Buffer.alloc(0),
   epoch = 0,
   timer;
 let hands = [hand()];
+let waveFeedback = null;
 const image = {
   data: readFileSync(
     new URL("../../tests/fixtures/preview-synthetic.jpg", import.meta.url),
@@ -72,6 +73,7 @@ const tick = () => {
         image,
         hands,
         hand_tracking: true,
+        wave: waveFeedback,
         control_epoch: epoch,
       },
     });
@@ -122,7 +124,10 @@ process.on("message", ({ command, value }) => {
     timer = null;
   }
   if (command === "start") start();
-  if (command === "match")
+  if (command === "match") {
+    // This result comes from the real Python matcher on the declared fixture.
+    waveFeedback = { phase: "matched", turns: 2 };
+    tick();
     write({
       version: 1,
       source: "vision",
@@ -132,4 +137,5 @@ process.on("message", ({ command, value }) => {
       timestamp: Date.now() / 1000,
       payload: { ...value, epoch },
     });
+  }
 });

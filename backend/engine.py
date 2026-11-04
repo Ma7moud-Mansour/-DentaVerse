@@ -9,6 +9,7 @@ from backend.protocol import Message, check_fresh
 from backend.preview import validate_camera_image
 from backend.hands import validate_hands
 from backend.hand_control import HandControl
+from backend.wave import RightWave, WAVE_PHASES, open_wave_palm
 from backend.storage import PROFILES, Store
 
 
@@ -454,10 +455,10 @@ class Engine:
                 if s["mode"] != "hand" or s["paused"] or s["screen"] != "workbench" or not s["isolated"] or not s["wave_enabled"] or not self._hand_camera_ready() or self.state["vision"]["capturing"] or self.state["vision"]["pending_capture"]:
                     raise ValueError("Automatic wave control is not currently active")
                 score=number(p.get("score"),0,1)
-                if p.get("method") != "DollarPy" or p.get("template_origin") != "authored_reference" or score<.82:
+                if p.get("method") != "DollarPy" or p.get("template_origin") != "authored_reference" or score<RightWave.THRESHOLD:
                     raise ValueError("Wave needs an accepted DollarPy classification")
                 right=next((h for h in self.state["vision"]["pose"]["hands"] if h["id"] == "right"),None)
-                if not right or not right["in_frame"] or right["gesture"] != "open_palm" or right["extended_fingers"]<4 or right["pinch_ratio"]<=.6:
+                if not open_wave_palm(right):
                     raise ValueError("Show an open right palm for wave control")
                 if time.monotonic()-self._last_wave<1.8:
                     raise ValueError("Finish the current wave before switching again")
@@ -505,7 +506,12 @@ class Engine:
         epoch = p.get("control_epoch")
         if epoch is not None and (type(epoch) is not int or epoch < 0):
             raise ValueError("Invalid hand control epoch")
-        return {"landmarks": landmarks, "trail": path, "capture_points": count,
+        wave = p.get("wave")
+        if wave is not None:
+            if not isinstance(wave, dict) or wave.get("phase") not in WAVE_PHASES or type(wave.get("turns")) is not int or not 0 <= wave["turns"] <= 2:
+                raise ValueError("Invalid wave feedback")
+            wave = {"phase": wave["phase"], "turns": wave["turns"]}
+        return {"wave": wave, "landmarks": landmarks, "trail": path, "capture_points": count,
             "capture_elapsed": number(p.get("capture_elapsed", 0), 0, 9), "timestamp": message.timestamp,
             "image": validate_camera_image(p.get("image")), "hands": validate_hands(p.get("hands", [])),
             "hand_tracking": p.get("hand_tracking") is True, "control_epoch": epoch}
